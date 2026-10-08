@@ -1,0 +1,43 @@
+name = "gatishva-bot"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+# Logs from inside the Durable Objects show in `wrangler tail` (measured), and
+# with observability on they are also kept and queryable under Workers > Logs.
+[observability]
+enabled = true
+
+# Watchdog only. The poll loop is the Hub's own alarm, which runs every few
+# seconds to every few minutes depending on the source (see src/sources/index.ts).
+# The cron just re-arms the alarm if it is ever lost.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Everything stateful — subscriptions, the outages seen so far, the outbox of
+# messages still to send — lives in one SQLite-backed Durable Object.
+[[durable_objects.bindings]]
+name = "HUB"
+class_name = "Hub"
+
+# GWP answers only from Georgia — and, as measured, from Cloudflare's Madrid data
+# centre. A GwpRelay is a stateless Durable Object created in western Europe until
+# one lands in Madrid; the Hub remembers which. See src/gwp-relay-do.ts.
+[[durable_objects.bindings]]
+name = "GWP_RELAY"
+class_name = "GwpRelay"
+
+# SQLite-backed classes are the ones available on the free plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Hub"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["GwpRelay"]
+
+[vars]
+BOT_USERNAME = "gatishva_bot"
+
+# Secrets are NOT stored here. Set them with `npx wrangler secret put <NAME>`:
+#   TELEGRAM_BOT_TOKEN, TG_WEBHOOK_SECRET, TELEGRAM_ALERT_CHAT_ID (optional)
+# For local `wrangler dev`, put the same names in .dev.vars (gitignored).
