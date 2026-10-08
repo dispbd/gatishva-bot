@@ -20,7 +20,7 @@ import { fingerprint, isCurrent, sha256, median, MISSES_TO_FINISH } from "./diff
 import { findKeys, addressRu } from "./georgian.ts";
 import { cityRu } from "./cities.ts";
 import { tg, describe, isChatGone, isNotModified, TelegramError, escapeHtml } from "./telegram.ts";
-import { nowSec, fmtDuration, fmtDateTime } from "./time.ts";
+import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts";
 import { UTILITIES } from "./types.ts";
 import type { Outage, Utility, SourceDef, GwpPath } from "./types.ts";
 import type { RelayResult } from "./gwp-relay-do.ts";
@@ -111,6 +111,19 @@ export class Hub extends DurableObject<Env> {
         op TEXT NOT NULL, tries INTEGER NOT NULL DEFAULT 0, UNIQUE (chat_id, key, op));
       CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
     `);
+    // Added after launch. `first_read` marks what a source already held when the
+    // bot first read it: an archive, "seen" only because the bot was switched on,
+    // which has no place in a statistic of how late news arrives.
+    const columns = this.rows<{ name: string }>(`PRAGMA table_info(events)`).map((c) => c.name);
+    if (!columns.includes("first_read")) {
+      this.sql.exec(`ALTER TABLE events ADD COLUMN first_read INTEGER NOT NULL DEFAULT 0`);
+      // Rows from before the column existed: a first read stamps a whole batch
+      // with the same instant, the earliest the source has.
+      this.sql.exec(
+        `UPDATE events SET first_read = 1
+         WHERE first_seen = (SELECT MIN(e.first_seen) FROM events e WHERE e.source = events.source)`,
+      );
+    }
   }
 
   private rows<T>(query: string, ...binds: (string | number | null)[]): T[] {
@@ -283,9 +296,9 @@ export class Hub extends DurableObject<Env> {
       const prev = this.rows<EventRow>(`SELECT * FROM events WHERE key = ?`, o.key)[0];
       if (!prev) {
         this.sql.exec(
-          `INSERT INTO events (key, source, city, fp, data, first_seen, last_seen, published_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          o.key, source.name, o.city, fp, JSON.stringify(o), now, now, o.publishedAt ?? null,
+          `INSERT INTO events (key, source, city, fp, data, first_seen, last_seen, published_at, first_read)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          o.key, source.name, o.city, fp, JSON.stringify(o), now, now, o.publishedAt ?? null, firstRead ? 1 : 0,
         );
         if (!firstRead && isCurrent(o, now, source.live(o.key))) queued += this.queueMatches(o, subs, utilitiesOf, "new");
         continue;
@@ -608,11 +621,16 @@ export class Hub extends DurableObject<Env> {
     }
     // How late we learn of things: our first sighting minus the provider's own
     // publication time, over the last week. This is the provider's delay plus
-    // our polling interval, and the number that answers "why so late?".
+    // our polling interval, and the number that answers "why so late?". Left
+    // out: whatever the first read found (an archive, not news), and dates with
+    // no time of day — te.ge's "28 სექტემბერი" would count from midnight.
     const week = this.rows<{ source: string; lag: number }>(
       `SELECT source, first_seen - published_at AS lag FROM events
-       WHERE published_at IS NOT NULL AND first_seen > ? AND first_seen - published_at BETWEEN -60 AND 86400`,
+       WHERE published_at IS NOT NULL AND first_read = 0 AND first_seen > ?
+         AND (published_at + ?) % 86400 != 0
+         AND first_seen - published_at BETWEEN -60 AND 86400`,
       now - 7 * 86400,
+      TBILISI_OFFSET_SEC,
     );
     const bySource = new Map<string, number[]>();
     for (const r of week) bySource.set(r.source, [...(bySource.get(r.source) ?? []), r.lag]);
