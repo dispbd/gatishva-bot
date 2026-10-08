@@ -1,0 +1,11 @@
+# Local-only secrets for `wrangler dev`. Copy to .dev.vars (gitignored) and fill in.
+# In production these are set with `npx wrangler secret put <NAME>` instead.
+#
+# Use a SEPARATE test bot from @BotFather here, never the production token: a local
+# run has its own empty storage, so it would treat every outage as new and could
+# answer real users' updates.
+TELEGRAM_BOT_TOKEN=123456789:AA...your_test_bot_token
+# Any long random string; Telegram echoes it back in a header on every webhook call.
+TG_WEBHOOK_SECRET=generate_a_long_random_string
+# Your own Telegram user id. Gets alerts when a source breaks and may use /status.
+TELEGRAM_ALERT_CHAT_ID=

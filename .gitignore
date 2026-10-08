@@ -1,0 +1,5 @@
+node_modules/
+.dev.vars
+.wrangler/
+# Regenerated from wrangler.toml by `npm run typecheck`.
+worker-configuration.d.ts

@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "lib": ["es2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+
+    // Nothing is compiled: wrangler bundles the Worker with esbuild and Node
+    // strips types when running tests. tsc is only ever a checker here, which is
+    // why `npm run typecheck` has to be part of the deploy path — esbuild removes
+    // types without looking at them.
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+
+    // Imports name real files (./time.ts), because Node's type stripping resolves
+    // specifiers literally and will not rewrite .js to .ts for us.
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    // The migration is gradual: JavaScript modules keep working untouched.
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["src/**/*", "test/**/*", "scripts/**/*", "worker-configuration.d.ts"]
+}
