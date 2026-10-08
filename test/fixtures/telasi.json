@@ -1,0 +1,89 @@
+{
+ "api": {
+  "listCount": 0,
+  "list": [],
+  "page": 1
+ },
+ "content": {
+  "listCount": 879,
+  "list": [
+   {
+    "id": 5918,
+    "user_id": 409,
+    "pid": 0,
+    "sort": 0,
+    "created_at": "2026-10-07 17:54:19",
+    "updated_at": "2026-10-07 17:54:19",
+    "date": "2026-10-07 17:54:19",
+    "status": "published",
+    "content_type": "poweroutage",
+    "slug": "7-oqtomberi-eleqtromomaragebis-aragegmuri-tsyveta-gadartva",
+    "alert": "0000-00-00 00:00:00",
+    "singlePageRoute": "",
+    "mail_sent": "",
+    "title": "7 ოქტომბერი ელექტრომომარაგების არაგეგმური წყვეტა (გადართვა)",
+    "teaser": "გაცნობებთ, რომ გადართვის გამო ელექტრომომარაგება არ მიეწოდება  ვარკეთილის რაიონის შემდეგ ქუჩებს",
+    "editor": "<p><br>&nbsp; &nbsp;გაცნობებთ, რომ გადართვის გამო ელექტრომომარაგება არ მიეწოდება &nbsp;ვარკეთილის რაიონის შემდეგ ქუჩებს:გუმათჰესის ,გუმათის ,ენგურჰესის, ჯავახეთის &nbsp;,აკაკი ფაღავას I ჩიხის,აკაკი ფაღავას II ჩიხის,კორნელი სანაძის I შესახვევის ,კორნელი სანაძის II შესახვევის ,კორნელი სანაძის II ჩიხის, აფრიკის დასახლების, ჭიჭინაძის 360-ე კილომეტრის ,გიორგი გვაზავას Iშესახვევის,ილია ბახტაძის Iშესახვევის &nbsp;,გიორგი ოდიშელიძის ,ნიკოლოზ აფხაზის ,სამგორის ველის I გასასვლელის,ჯამბულ წურწუმიას II შესახვევის,ნავთლუღის დასახლების 360კილომეტრის,სავანის I შესახვევის, ფრისის I ჩიხის,მიხეილ ცისკარიშვილის &nbsp;,ნუგზარ საჯაიას I ჩიხის, გუმათჰესის I შესახვეწვის,ნავთლუღის 2 დასახლების &nbsp;4 ,ჭიჭინაძის, &nbsp;ჭიჭინაძის ჩიხის ,აკაკი ფაღავას ,სამგორის რაიონის,ჯამბულ წურწუმიას, &nbsp;ვარკეთილი-III მასივი-ზედა/პლატოს ,აფრიკის დას \"თბილგაზ.\" მიმდებარის ,ლოჭინის ხევის,გიორგი გურჯიევის,ილია ბახტაძის, &nbsp;სჭიჭინაძის V ჩიხი ,რაზიკაშვილის ,ნავთლუღის.დასახლების &nbsp;III ჩიხის, ლუკა რაზიკაშვილის ,იდუმალის ,აფრიკის დასახლების 360კილოიმეტრის,კორნელი სანაძის I ჩიხის ,დიმიტრი ერმაკოვის ,ქეთევან ჭილაშვილის,თურაშაულის ჩიხის,გიორგი ოდიშელიძის II ჩიხის ,მერაბ ქვილითაიას I ჩიხის,ველის &nbsp;1 გასასვლელის,გიორგი გურგენიძის შესახვევის,იების II შესახვევის,დიდი ლილო-პატარა ლილოს,ჭიჭინაძის III ჩიხის ,ჭიჭინაძის შესახვევის,იოსებ და ლეონ ორბელების,ნავთლუღის დასახლების,ნუგზარ საჯაიას I შესახვევის,ჭიჭინაძის VI ჩიხის ,აკაკი ფაღავას შესახვევის,ალექსანდრე ზაალიშვილის ,ქეთევან ჭილაშვილის II გასასვლელის,ქეთევან ჭილაშვილის III გასასვლელის,ქიზიყის &nbsp;II შესახვების,წუწუნავას ,გარდაბნის გზატკეცილის,გიორგი მაჩაბელის I შესახვევის,გიორგი ოდიშელიძის I შესახვევის ,ირინე ალექსიძის, თურმანაულის ,გიორგი გურჯიევის I ჩიხის,ჭიჭინაძის IV ჩიხის, ნავთლუღის 2 დასახლების 7,ტიმოთე გაბაშვილის ,ლუკა რაზიკაშვილის II შესახვევის,ქვემო ალექსეევკა,ანდრია გუგუშვილის ,ოზაანის ,პაატა გუგუშვილის ,გიორგი გურჯიევის ჩიხის,ფრონეს ,ირინა შტენბერგის, &nbsp;ჯამბულ წურწუმიას III შესახვევის,იების,კახეთის გზატკეცილის,ლევან რაზიკაშვილის,მოსტკოვის ,ჭიჭინაძის VII ჩიხის ,აკაკი ფაღავას I შესახვევის,ქვემო ალექსეევკის,ნავთისხევის,კორნელი სანაძის I გასასვლელის,კორნელი სანაძის III ჩიხი ,II ნავთლუღის დასახლების 360კილომეტრის,პაატა გუგუშვილის I შესახვევის,თურაშაულის ,ლოჭინის ხევის ,ემა ლალაევა-ედიბერიძის ,ჯამბულ წურწუმიას IV შესახვევის,მიხეილ გრიგორაშვილის,პაატა გუგუშვილის II შესახვევის,ფრისის ,ლუკა რაზიკაშვილის V შესახვევის,ლუკა რაზიკაშვილის V ჩიხის,ლევან რაზიკაშვილის I ჩიხის,ლუკა რაზიკაშვილის I შესახვევის,ქიზიყის ,ქიზიყის II,ქინძმარაულის ,წურწუმიას ,გიორგი მაჩაბელის ,გიორგი გვაზავას,ნავთლუღი-2,360კილომეტრი მიმდებარის,სავანეს ,ჭიჭინაძის I ჩიხის ,ბესო ბერიას &nbsp;,ნუგზარ საჯაიას, &nbsp;ლუკა რაზიკაშვილის IV ჩიხის,ნავთლუღის დასახლების II შესახვევის, ლუკა რაზიკაშვილის I ჩიხის,ნავთლუღის 2 დასახლების VII შესახვევის,კორნელი სანაძის ,გრიგოლ აფშინაშვილის ,ქეთევან ჭილაშვილის I ჩიხის,ცისარტყელას ,ჭიჭინაძის 360კილომეტრის ჩიხის,გიორგი გვაზავას I ჩიხის ,გიორგი ოდიშელიძის I ჩიხის ,მერაბ ქვილითაიას ,ირინა ენუქიძის I გასასვლელის ,ჯამბულ წურწუმიას I შესახვევის,ანდრია გუგუშვილის I შესახვევის,სამგორის დასახლების,სავანე, 360კილომეტრის,ჭიჭინაძის II ჩიხის.<br>&nbsp;</p><p>ელექტრომომარაგების აღდგენის სავარაუდო დრო: 07.10.2026 &nbsp;17:47 სთ.<br>კომპანია ბოდიშს უხდის მომხმარებლებს შექმნილი დისკომფორტის გამო. სამუშაოების დასრულების შემდეგ აბონენტებს &nbsp;ელექტრომომარაგება აღუდგება.</p><p>&nbsp;</p>",
+    "localisedto": "ka"
+   },
+   {
+    "id": 5917,
+    "user_id": 402,
+    "pid": 0,
+    "sort": 0,
+    "created_at": "2026-10-07 16:52:35",
+    "updated_at": "2026-10-07 16:52:35",
+    "date": "2026-10-07 16:52:35",
+    "status": "published",
+    "content_type": "poweroutage",
+    "slug": "skhvadaskhva-samushaoebis-chatarebis-gamo-9-oqtombers-eleqtromomarageba-droebit-sheizghudeba",
+    "alert": "0000-00-00 00:00:00",
+    "singlePageRoute": "",
+    "mail_sent": "Yes",
+    "title": "სხვადასხვა სამუშაოების ჩატარების გამო 9 ოქტომბერს ელექტრომომარაგება დროებით შეიზღუდება",
+    "teaser": "სხვადასხვა სამუშაოების ჩატარების გამო 9 ოქტომბერს ელექტრომომარაგება დროებით შეიზღუდება",
+    "editor": "<p style=\"text-align:justify;\"><span style=\"color:#365F91;\"><span lang=\"GEO/KAT\" dir=\"ltr\"><strong>კრწანისის რაიონი</strong></span><strong></strong></span></p><p style=\"text-align:justify;\"><span lang=\"GEO/KAT\" dir=\"ltr\">გადაუდებელი სამუშაოების გამო 11:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება:&nbsp;მარნეულის გზატკეცილის, სოფელი ქვემო თელეთის, ფონიჭალის III</span><span lang=\"EN-US\" dir=\"ltr\">, IV&nbsp;</span><span lang=\"GEO/KAT\" dir=\"ltr\">მიკრორაიონების, სოფიევას, ვირსალაძის და მეფე ლუარსაბ პირველის ქუჩების&nbsp;</span><span style=\"background-color:white;\"><span lang=\"GEO/KAT\" dir=\"ltr\">მ</span></span><span lang=\"GEO/KAT\" dir=\"ltr\">ოსახლეობას.&nbsp; &nbsp;</span></p><p style=\"text-align:justify;\"><span style=\"color:#365F91;\"><span lang=\"GEO/KAT\" dir=\"ltr\"><strong>მთაწმინდის რაიონი</strong></span><strong></strong></span></p><p style=\"text-align:justify;\"><span lang=\"GEO/KAT\" dir=\"ltr\">გადაუდებელი სამუშაოების გამო 11:00 საათიდან 18:00 საათამდე შეზღუდვა შეეხება:&nbsp;გალის, თარხნიშვილის, ყაზბეგის, ერეკლე ტატიშვილის, ვალერიან გუნიას, ანასტასია ერისთავი-ხოშტარიას, ბარნოვის, რჩეულიშვილის, გოგებაშვილის, ზანდუკელის, ტარიელ სვანიძის, კერესელიძის, თეიმურაზ ჩირგაძის, შანიძის, ჭოველიძის, ჯანაშიას, შოთა მილორავას, ნათია ბაშალეიშვილის, გუდაურის, მაჭავარიანის, ბელინსკის, თერგის და პეტრიაშვილის ქუჩების&nbsp;</span><span style=\"background-color:white;\"><span lang=\"GEO/KAT\" dir=\"ltr\">მ</span></span><span lang=\"GEO/KAT\" dir=\"ltr\">ოსახლეობას.&nbsp; &nbsp;</span></p><p style=\"text-align:justify;\"><span style=\"color:#365F91;\"><span lang=\"GEO/KAT\" dir=\"ltr\"><strong>ისნის რაიონი</strong></span><strong></strong></span></p><p style=\"text-align:justify;\"><span lang=\"GEO/KAT\" dir=\"ltr\">ქსელში გადართვების გამო 01:00 საათიდან 04:00 საათამდე შეზღუდვა შეეხება:&nbsp;ბერი გაბრიელ სალოსის გამზირის, რიჩარდ ჰოლბრუკის, ნავთლუღის, მარჯორი უორდროპის, წერნაკის, რთველაძის, მეგობრობის, ჭრელაშვილის, აბრამიშვილის, არტურ ლაისტის, ჰოსპიტალის, იუნკერთა, აჰმედ ჯავადის, ლეილა აბაშიძის, დიმიტრი გულიას, ჩოლოყაშვილის, მიკოლა ბაჟანის და გრიგოლ აფშინაშვილის ქუჩების&nbsp;</span><span style=\"background-color:white;\"><span lang=\"GEO/KAT\" dir=\"ltr\">მ</span></span><span lang=\"GEO/KAT\" dir=\"ltr\">ოსახლეობას.&nbsp; &nbsp;</span></p><p style=\"text-align:justify;\">&nbsp;</p><p style=\"text-align:center;\"><span lang=\"GEO/KAT\" dir=\"ltr\"><strong>კომპანია&nbsp;ბოდიშს&nbsp;უხდის&nbsp;მომხმარებლებს&nbsp;შექმნილი&nbsp;დისკომფორტის&nbsp;გამო</strong></span><span lang=\"PT-BR\" dir=\"ltr\"><strong>.&nbsp;</strong></span></p><p style=\"text-align:center;\"><span lang=\"GEO/KAT\" dir=\"ltr\"><strong>სამუშაოების&nbsp;დასრულების&nbsp;შემდეგ&nbsp;აბონენტებს&nbsp;ელექტრომომარაგება&nbsp;აღუდგება</strong></span><span lang=\"PT-BR\" dir=\"ltr\"><strong>.</strong></span></p><p style=\"text-align:justify;\"><span lang=\"GEO/KAT\" dir=\"ltr\">&nbsp;</span></p>",
+    "localisedto": "ka"
+   },
+   {
+    "id": 5913,
+    "user_id": 408,
+    "pid": 0,
+    "sort": 0,
+    "created_at": "2026-10-07 07:35:32",
+    "updated_at": "2026-10-07 07:35:32",
+    "date": "2026-10-07 04:30:00",
+    "status": "published",
+    "content_type": "poweroutage",
+    "slug": "7-oqtomberi-eleqtromomaragebis-aragegmuri-tsyvetakhandzari",
+    "alert": "0000-00-00 00:00:00",
+    "singlePageRoute": "",
+    "mail_sent": "",
+    "title": "7 ოქტომბერი  ელექტრომომარაგების არაგეგმური წყვეტა(ხანძარი)",
+    "teaser": "გაცნობებთ, რომ ხანძრის  გამო ელექტრომომარაგება არ მიეწოდება  საბურთალოს რაიონის შემდეგ ქუჩებს",
+    "editor": "<p><a><span style=\"color:black;\"><span lang=\"GEO/KAT\" dir=\"ltr\">გაცნობებთ, რომ ხანძრის&nbsp; გამო ელექტრომომარაგება არ მიეწოდება &nbsp;</span></span></a><span style=\"color:red;\"><span lang=\"GEO/KAT\" dir=\"ltr\">საბურთალოს </span></span><span style=\"color:black;\"><span lang=\"GEO/KAT\" dir=\"ltr\">რაიონის შემდეგ ქუჩებს: </span><span>ახალშენის ,ვარაზის ხევი,ჭაბუა ამირეჯიბის გზატკეცილი,სიმონ ჩიქოვანის &nbsp;,მელიტონ და ანდრია ბალანჩივაძეების &nbsp;,იოსელიანის &nbsp;,პლატონ იოსელიანის ,ალექსანდრე შავერზაშვილი ქ,ალექსანდრე შავერზაშვილის I ჩიხი,ბაკურიანის ,მერაბ კოსტავას &nbsp;,ვახტანგ ჩიქოვანის &nbsp;,ალექსანდრე ბასილაიას I ჩიხი,ვიქტორ დოლიძის &nbsp;,გოჩა აბაშიძის ქ,ვერცხლის II ჩიხი ,სულხან ნასიძის ,ლიხაურის ,ალექსანდრე ბასილაიას ,ქარელის ,გურამ ბზვანელის &nbsp;,ჭიათურის ,ომარ ფხაკაძის ქ,ბაკურციხის ,ლიხაურის ჩიხი,თამაზ ჭილაძის ქ,კიტა ბუაჩი</span><span lang=\"GEO/KAT\" dir=\"ltr\">ძის</span><span></span></span>.</p><p><span style=\"color:black;\"><span lang=\"GEO/KAT\" dir=\"ltr\">ელექტრომომარაგების აღდგენის სავარაუდო დრო:&nbsp; </span></span><span style=\"color:red;\"><span lang=\"GEO/KAT\" dir=\"ltr\">07.10.2026&nbsp; 06</span></span><span style=\"color:black;\"><span lang=\"GEO/KAT\" dir=\"ltr\">:20 </span></span><span style=\"color:red;\"><span lang=\"GEO/KAT\" dir=\"ltr\">სთ.</span></span></p><p style=\"margin-left:0in;\"><span style=\"color:black;\"><span lang=\"GEO/KAT\" dir=\"ltr\">კომპანია ბოდიშს უხდის მომხმარებლებს შექმნილი დისკომფორტის გამო. სამუშაოების დასრულების შემდეგ აბონენტებს&nbsp; ელექტრომომარაგება აღუდგება.</span></span></p>",
+    "localisedto": "ka"
+   },
+   {
+    "id": 5910,
+    "user_id": 408,
+    "pid": 0,
+    "sort": 0,
+    "created_at": "2026-10-07 00:13:15",
+    "updated_at": "2026-10-07 00:13:15",
+    "date": "2026-10-07 00:12:00",
+    "status": "published",
+    "content_type": "poweroutage",
+    "slug": "07-oqtomberi-eleqtromomaragebis-aragegmuri-tsyveta-avaria",
+    "alert": "0000-00-00 00:00:00",
+    "singlePageRoute": "",
+    "mail_sent": "",
+    "title": "07 ოქტომბერი ელექტრომომარაგების არაგეგმური წყვეტა (ავარია)",
+    "teaser": "გაცნობებთ, რომ ავარიის გამოელექტრომომარაგება არ მიეწოდება დიღმის რაიონის შემდეგ ქუჩებს",
+    "editor": "<p style=\"text-align:justify;\"><span style=\"background-color:white;color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">გაცნობებთ,&nbsp;რომ&nbsp;ავარიის&nbsp;გამოელექტრომომარაგება&nbsp;არ&nbsp;მიეწოდება&nbsp;</span></span><span style=\"background-color:white;color:red;\"><span lang=\"GEO/KAT\" dir=\"ltr\">დიღმის</span></span><span style=\"background-color:white;color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">&nbsp;რაიონის&nbsp;შემდეგ&nbsp;ქუჩებს: </span></span><span style=\"color:black;\">დიღმის&nbsp;მას<span lang=\"GEO/KAT\" dir=\"ltr\">ივის&nbsp;</span>1&nbsp;კვ<span lang=\"GEO/KAT\" dir=\"ltr\">არტალს</span>,&nbsp;დიღმის&nbsp;მას<span lang=\"GEO/KAT\" dir=\"ltr\">ივის</span> 3&nbsp;კვ<span lang=\"GEO/KAT\" dir=\"ltr\">არტალის&nbsp;</span>ბაზარ<span lang=\"GEO/KAT\" dir=\"ltr\">ს</span>,&nbsp;ლუბლიანასა<span lang=\"GEO/KAT\" dir=\"ltr\">, ა</span>ხმეტელის,&nbsp;ევგენი&nbsp;მიქელაძის,&nbsp;დიღმის&nbsp;მას<span lang=\"GEO/KAT\" dir=\"ltr\">ივის</span> 4&nbsp;კვ<span lang=\"GEO/KAT\" dir=\"ltr\">არტალს</span>,&nbsp;ჯორჯ&nbsp;ბალანჩინის,&nbsp;აკაკი&nbsp;ბელიაშვილის,&nbsp;დიღმის&nbsp;მას<span lang=\"GEO/KAT\" dir=\"ltr\">ივის</span> 6&nbsp;კვ<span lang=\"GEO/KAT\" dir=\"ltr\">არტალს</span>,&nbsp;დიღმის&nbsp;მას<span lang=\"GEO/KAT\" dir=\"ltr\">ივის</span> 3&nbsp;კვ<span lang=\"GEO/KAT\" dir=\"ltr\">არტალს</span>,&nbsp;რობაქიძის&nbsp;გამზ<span lang=\"GEO/KAT\" dir=\"ltr\">ირს</span>.</span></p><p style=\"margin-left:0in;\"><span style=\"color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">ელექტრომომარაგების&nbsp;აღდგენის&nbsp;სავარაუდო&nbsp;დრო: </span></span><span style=\"color:red;\"><span lang=\"GEO/KAT\" dir=\"ltr\">07.10.2026 00:22</span></span><span style=\"color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">სთ.</span></span></p><p style=\"margin-left:0in;\"><span style=\"color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">კომპანია&nbsp;ბოდიშს&nbsp;უხდის&nbsp;მომხმარებლებს&nbsp;შექმნილი&nbsp;დისკომფორტის&nbsp;გამო. სამუშაოების&nbsp;დასრულების&nbsp;შემდეგ&nbsp;აბონენტებს&nbsp;ელექტრომომარაგება&nbsp;აღუდგება.</span></span></p>",
+    "localisedto": "ka"
+   }
+  ],
+  "page": 1
+ }
+}

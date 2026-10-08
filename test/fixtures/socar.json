@@ -1,0 +1,79 @@
+{
+ "items": [
+  {
+   "id": "1f93c523-2778-4ee0-a392-4897a77e02ba",
+   "objectId": 1902088,
+   "description": "კოროზიის მიერ დაზიანებული გაზსადენის შეკეთება",
+   "title": "სიღნაღი: სოფ. ნუკრიანი",
+   "affectedCustomers": 399,
+   "start": "2026-10-09T11:00:00+04:00",
+   "end": "2026-10-09T16:00:00+04:00",
+   "notifiedCustomers": 0,
+   "isNotified": true,
+   "type": "Planned",
+   "docflowCode": "TF-SGG-DNM-PTO-2026-10-7/02",
+   "dateChanged": false,
+   "created": "2026-10-07T13:33:28.7446811+04:00",
+   "isPending": false,
+   "isDeactivated": false,
+   "detail": {
+    "notificationTitle": "09 ოქტომბრის 11:00 საათიდან 09 ოქტომბრის 16:00 საათამდე სიღნაღის მუნიციპალიტეტში სოფელ ნუკრიანს გაზმომარაგება შეუწყდება ",
+    "notificationDescription": "გაზსადენზე დაგეგმილი სარემონტო საექსპლუატაციო სამუშაოების გამო, მიმდინარე წლის  09 ოქტომბრის 11:00 საათიდან 09 ოქტომბრის 16:00 საათამდე სიღნაღის მუნიციპალიტეტში სოფელ ნუკრიანში მცხოვრებ 399 აბონენტს გაზმომარაგება შეუწყდება. ბუნებრივი გაზის მიწოდება ეტაპობრივად დაიწყება 09 ოქტომბრის 16:00 საათიდან და სრულად აღდგება დღის ბოლომდე.  კომპანია „სოკარ ჯორჯია გაზი\" ბოდიშს გიხდით დისკომფორტისთვის და აბონენტებს მოუწოდებს, დაკეტილ მდგომარეობაში იქონიონ ბინებში არსებული გაზის ონკანები და უყურადღებოდ არ დატოვონ გაზის დანადგარები. დამატებითი ინფორმაციისთვის დარეკეთ „სოკარ დდჯორჯია გაზის\" ცხელ ხაზზე: 16 114",
+    "notificationTitleEN": "From 11:00 am on 09 October to 16:00 pm on 09 October natural gas will be cut of the Nukriani village in municipality of Sighnaghi",
+    "notificationDescriptionEN": "Due to the scheduled pipeline maintenance and repair works, gas supply will be interrupted to 399 customers of to the the Nukriani village from 11:00 am on 09 October to 16:00 pm on 09 October in municipality of Sighnaghi. The natural gas supply will be restored to the customers step-by-step and will be fully restored by the end of the day. The \"SOCAR Georgia Gas\" company apologizes for the inconvenience apologizes and calls the customers to have gas taps closed in the apartments and not to leave gas installations unattended. For more information, call  \"SOCAR Georgia Gas\" hotline: 16 114 or visit our web portal www.mygas.ge"
+   }
+  },
+  {
+   "id": "b3674d76-7475-4278-b8ae-bfc30c787392",
+   "objectId": 1903591,
+   "description": "შეჭრა, ახალი აბონენტის დაერთება ქსელზე.",
+   "title": "ქუთაისი: ნიკეას ქ. 54ა",
+   "affectedCustomers": 88,
+   "start": "2026-10-09T10:00:00+04:00",
+   "end": "2026-10-09T12:00:00+04:00",
+   "notifiedCustomers": 0,
+   "isNotified": true,
+   "type": "Planned",
+   "docflowCode": "TF-SOR-DNM-PTO-2026-10-7/01",
+   "dateChanged": false,
+   "created": "2026-10-07T10:08:08.759948+04:00",
+   "isPending": false,
+   "isDeactivated": false,
+   "detail": {
+    "notificationTitle": "09 ოქტომბრის 10:00 საათიდან 09 ოქტომბრის 12:00 საათამდე ქუთაისის მუნიციპალიტეტში ნიკეას ქუჩა N54ა-ს გაზმომარაგება შეუწყდება ",
+    "notificationDescription": "გაზსადენზე დაგეგმილი სარემონტო საექსპლუატაციო სამუშაოების გამო, მიმდინარე წლის  09 ოქტომბრის 10:00 საათიდან 09 ოქტომბრის 12:00 საათამდე ქუთაისის მუნიციპალიტეტში ნიკეას ქუჩა N54ა-ში მცხოვრებ 88 აბონენტს გაზმომარაგება შეუწყდება. ბუნებრივი გაზის მიწოდება ეტაპობრივად დაიწყება 09 ოქტომბრის 12:00 საათიდან და სრულად აღდგება დღის ბოლომდე.  კომპანია „სოკარ ჯორჯია გაზი\" ბოდიშს გიხდით დისკომფორტისთვის და აბონენტებს მოუწოდებს, დაკეტილ მდგომარეობაში იქონიონ ბინებში არსებული გაზის ონკანები და უყურადღებოდ არ დატოვონ გაზის დანადგარები. დამატებითი ინფორმაციისთვის დარეკეთ „სოკარ დდჯორჯია გაზის\" ცხელ ხაზზე: 16 114",
+    "notificationTitleEN": "From 10:00 am on 09 October to 12:00 pm on 09 October natural gas will be cut of the Nikea street N54a in municipality of Kutaisi",
+    "notificationDescriptionEN": "Due to the scheduled pipeline maintenance and repair works, gas supply will be interrupted to 88 customers of to the the Nikea street N54a from 10:00 am on 09 October to 12:00 pm on 09 October in municipality of Kutaisi. The natural gas supply will be restored to the customers step-by-step and will be fully restored by the end of the day. The \"SOCAR Georgia Gas\" company apologizes for the inconvenience apologizes and calls the customers to have gas taps closed in the apartments and not to leave gas installations unattended. For more information, call  \"SOCAR Georgia Gas\" hotline: 16 114 or visit our web portal www.mygas.ge"
+   }
+  },
+  {
+   "id": "4e7c9377-3224-4fea-9daa-d238a7fa337c",
+   "objectId": 1903592,
+   "description": "ახალი აბონენტების დაერთება",
+   "title": "ახმეტა: საბერო",
+   "affectedCustomers": 35,
+   "start": "2026-10-09T10:00:00+04:00",
+   "end": "2026-10-09T15:00:00+04:00",
+   "notifiedCustomers": 0,
+   "isNotified": true,
+   "type": "Planned",
+   "docflowCode": "TF-SGG-DNM-PTO-2026-10-7/01",
+   "dateChanged": false,
+   "created": "2026-10-07T12:50:01.3139409+04:00",
+   "isPending": false,
+   "isDeactivated": false,
+   "detail": {
+    "notificationTitle": "09 ოქტომბრის 10:00 საათიდან 09 ოქტომბრის 15:00 საათამდე ახმეტის მუნიციპალიტეტში სოფელ საბეროს გაზმომარაგება შეუწყდება ",
+    "notificationDescription": "გაზსადენზე დაგეგმილი სარემონტო საექსპლუატაციო სამუშაოების გამო, მიმდინარე წლის  09 ოქტომბრის 10:00 საათიდან 09 ოქტომბრის 15:00 საათამდე ახმეტის მუნიციპალიტეტში სოფელ საბეროში მცხოვრებ 35 აბონენტს გაზმომარაგება შეუწყდება. ბუნებრივი გაზის მიწოდება ეტაპობრივად დაიწყება 09 ოქტომბრის 15:00 საათიდან და სრულად აღდგება დღის ბოლომდე.  კომპანია „სოკარ ჯორჯია გაზი\" ბოდიშს გიხდით დისკომფორტისთვის და აბონენტებს მოუწოდებს, დაკეტილ მდგომარეობაში იქონიონ ბინებში არსებული გაზის ონკანები და უყურადღებოდ არ დატოვონ გაზის დანადგარები. დამატებითი ინფორმაციისთვის დარეკეთ „სოკარ დდჯორჯია გაზის\" ცხელ ხაზზე: 16 114",
+    "notificationTitleEN": "From 10:00 am on 09 October to 15:00 pm on 09 October natural gas will be cut of the Sabero village in municipality of Akhmeta",
+    "notificationDescriptionEN": "Due to the scheduled pipeline maintenance and repair works, gas supply will be interrupted to 35 customers of to the the Sabero village from 10:00 am on 09 October to 15:00 pm on 09 October in municipality of Akhmeta. The natural gas supply will be restored to the customers step-by-step and will be fully restored by the end of the day. The \"SOCAR Georgia Gas\" company apologizes for the inconvenience apologizes and calls the customers to have gas taps closed in the apartments and not to leave gas installations unattended. For more information, call  \"SOCAR Georgia Gas\" hotline: 16 114 or visit our web portal www.mygas.ge"
+   }
+  }
+ ],
+ "currentPage": 1,
+ "totalPages": 1127,
+ "pageSize": 15,
+ "totalCount": 16905,
+ "hasPrevious": false,
+ "hasNext": true
+}
