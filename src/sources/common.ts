@@ -21,6 +21,23 @@ export async function fetchText(url: string, init: RequestInit = {}): Promise<st
   return await r.text();
 }
 
+/**
+ * Try `fn` up to `attempts` times, straight away, while it fails with one of
+ * `statuses`. For a provider whose load balancer sends some requests to a
+ * backend that is down: the next request lands elsewhere, so waiting would
+ * only add delay.
+ */
+export async function retrying<T>(fn: () => Promise<T>, attempts: number, statuses: number[]): Promise<T> {
+  const transient = new RegExp(`answered (${statuses.join("|")})$`);
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i >= attempts || !(e instanceof Error) || !transient.test(e.message)) throw e;
+    }
+  }
+}
+
 export function postJson(url: string, body: unknown, headers: Record<string, string> = {}): Promise<string> {
   return fetchText(url, {
     method: "POST",

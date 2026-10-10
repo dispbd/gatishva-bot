@@ -9,12 +9,15 @@
 //
 // These three, plus GWP, are what water.andreev-e.ru (@WaterGeorgia_bot)
 // polls every five minutes; its source code is public (andreev-e/water_ge).
-import { fetchText, postJson, htmlToText, squash, looksEmergency } from "./common.ts";
+import { fetchText, postJson, retrying, htmlToText, squash, looksEmergency } from "./common.ts";
 import { splitAddresses } from "../georgian.ts";
 import { parseLocal, tbilisiDate } from "../time.ts";
 import type { Outage, SourceDef } from "../types.ts";
 
 // --- Energo-Pro --------------------------------------------------------------
+
+/** Tries per poll; see `energo.fetchRaw`. Each costs ~0.1 s and one subrequest. */
+export const ENERGO_ATTEMPTS = 6;
 
 interface EnergoAlert {
   taskId: number;
@@ -70,7 +73,13 @@ export const energo: SourceDef = {
   name: "energo",
   everySec: 120,
   live: () => false,
-  fetchRaw: () => postJson("https://my.energo-pro.ge/owback/searchAlerts", { search: "" }),
+  // Energo-Pro's nginx rotates requests over three Tomcat backends and two of
+  // them answer 404 (measured 2026-10-11: 200, 404, 404, repeating, 40 requests
+  // in a row). One request every two minutes then fails ten times running a few
+  // times a day — not a block, just bad luck — so a poll retries on the spot.
+  // Six tries all fail one time in eleven; ten polls in a row, practically never.
+  fetchRaw: () =>
+    retrying(() => postJson("https://my.energo-pro.ge/owback/searchAlerts", { search: "" }), ENERGO_ATTEMPTS, [404, 502, 503]),
   parse: parseEnergo,
 };
 
