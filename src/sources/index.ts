@@ -9,9 +9,10 @@ import { gwp, gwpPlanned } from "./gwp.ts";
 import { telasi } from "./telasi.ts";
 import { te } from "./te.ts";
 import { energo, socar, uwsc } from "./regions.ts";
+import { georoad } from "./georoad.ts";
 import type { SourceDef } from "../types.ts";
 
-export const SOURCES: SourceDef[] = [gwp, gwpPlanned, telasi, te, energo, socar, uwsc];
+export const SOURCES: SourceDef[] = [gwp, gwpPlanned, telasi, te, energo, socar, uwsc, georoad];
 
 export function sourceByName(name: string): SourceDef | undefined {
   return SOURCES.find((s) => s.name === name);

@@ -1,5 +1,13 @@
-export type Utility = "water" | "power" | "gas";
+/** What an outage cuts off. Roads are no utility, but they travel the same path. */
+export type Utility = "water" | "power" | "gas" | "road";
+
+/** The utilities a chat switches on and off in /types. Roads come by road subscription only. */
 export const UTILITIES: Utility[] = ["water", "power", "gas"];
+
+/** Whether a chat with `on` switched on wants outages of `u`. */
+export function wanted(u: Utility, on: Utility[]): boolean {
+  return !UTILITIES.includes(u) || on.includes(u);
+}
 
 /**
  * One outage, whichever provider published it, in the provider's own words.
@@ -24,6 +32,13 @@ export interface Outage {
    * the high-voltage grid. Street subscribers are matched by district instead.
    */
   wholeDistricts?: boolean;
+  /**
+   * What the header names instead of city and district, Georgian: a road and
+   * its section, "ვაზიანი-გომბორი-თელავი, 26-ე კმ".
+   */
+  place?: string;
+  /** The notice itself says it is over: "traffic restored". */
+  over?: boolean;
   emergency: boolean;
   /** Epoch seconds. Absent when the provider does not say. */
   start?: number;

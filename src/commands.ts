@@ -11,6 +11,7 @@ export const BOT_COMMANDS: Record<"ru" | "en" | "ka", Command[]> = {
   ru: [
     { command: "add", description: "Подписаться на улицу" },
     { command: "city", description: "Подписаться на весь город" },
+    { command: "road", description: "Перекрытия дорог" },
     { command: "list", description: "Мои подписки" },
     { command: "now", description: "Что отключено сейчас по моим адресам" },
     { command: "types", description: "Вода, свет, газ — что присылать" },
@@ -20,6 +21,7 @@ export const BOT_COMMANDS: Record<"ru" | "en" | "ka", Command[]> = {
   en: [
     { command: "add", description: "Follow a street" },
     { command: "city", description: "Follow a whole city" },
+    { command: "road", description: "Road closures" },
     { command: "list", description: "My subscriptions" },
     { command: "now", description: "What's off at my addresses now" },
     { command: "types", description: "Water, power, gas — what to send" },
@@ -29,6 +31,7 @@ export const BOT_COMMANDS: Record<"ru" | "en" | "ka", Command[]> = {
   ka: [
     { command: "add", description: "ქუჩის გამოწერა" },
     { command: "city", description: "მთელი ქალაქის გამოწერა" },
+    { command: "road", description: "გზების ჩაკეტვა" },
     { command: "list", description: "ჩემი გამოწერები" },
     { command: "now", description: "რა არის გათიშული ჩემს მისამართებზე" },
     { command: "types", description: "წყალი, შუქი, გაზი — რა გამოვგზავნო" },

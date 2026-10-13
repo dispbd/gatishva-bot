@@ -107,6 +107,8 @@ async function onText(env: Env, m: TgMessage): Promise<void> {
       return arg.trim() ? await addStreet(env, m, arg, lang) : await askStreet(env, chat.id, lang, m.from);
     case "city":
       return arg.trim() ? await addCity(env, m, arg, lang) : await askCity(env, chat.id, lang, m.from);
+    case "road":
+      return arg.trim() ? await addRoad(env, m, arg, lang) : await send(env, chat.id, t(lang).roadHint);
     case "list":
       return await showList(env, chat.id, lang);
     case "types":
@@ -160,11 +162,20 @@ async function addCity(env: Env, m: TgMessage, text: string, lang: Lang): Promis
   await send(env, m.chat.id, confirmation(r, city, lang));
 }
 
+async function addRoad(env: Env, m: TgMessage, text: string, lang: Lang): Promise<void> {
+  if (!(await mayEdit(env, m))) return await send(env, m.chat.id, t(lang).notAdmin);
+  const r = await hub(env).addRoad(chatOf(m.chat), text);
+  await send(env, m.chat.id, confirmation(r, "", lang));
+}
+
 function confirmation(r: AddResult, city: string, lang: Lang): string {
   const S = t(lang);
   if (!r.ok || !r.sub) return `❌ ${r.error === "too_many" ? S.tooMany(r.count ?? 0) : S.tooShort}`;
   const place = escapeHtml(translit(city, lang));
-  const lines = [r.sub.kind === "city" ? S.followingCity(place) : S.followingStreet(escapeHtml(r.sub.label), place)];
+  const label = escapeHtml(r.sub.label);
+  const lines = [
+    r.sub.kind === "city" ? S.followingCity(place) : r.sub.kind === "road" ? S.followingRoad(label) : S.followingStreet(label, place),
+  ];
   if (r.examples.length) {
     lines.push(S.seenAs(r.examples.map((e) => `<i>${escapeHtml(addressLocal(e, lang))}</i>`).join(", ")));
   } else if (r.sub.kind === "street") {
@@ -185,6 +196,7 @@ function confirmation(r: AddResult, city: string, lang: Lang): string {
 
 function subLabel(s: Sub, lang: Lang): string {
   if (s.kind === "city") return `🏙 ${translit(s.label, lang)}`;
+  if (s.kind === "road") return `🚧 ${s.label}`;
   const where = s.districts?.length ? ` · ${s.districts.map((d) => translit(d, lang)).join(", ")}` : "";
   return `📍 ${s.label}${where}`;
 }

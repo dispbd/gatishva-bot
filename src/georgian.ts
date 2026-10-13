@@ -350,6 +350,7 @@ const TYPE_WORDS: { prefix: string; ru: string; en: string; lead?: boolean; enLe
   { prefix: "teritori", ru: "терр.", en: "area" },
   { prefix: "mimdebare", ru: "окрестности", en: "vicinity" },
   { prefix: "da", ru: "и", en: "and", exact: true },
+  { prefix: "km", ru: "км", en: "km", exact: true }, // "კმ", on road sections
 ];
 
 type TypeWord = (typeof TYPE_WORDS)[number];

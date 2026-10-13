@@ -40,11 +40,14 @@ function ruPlural(n: number, one: string, few: string, many: string): string {
 
 export type Reason =
   | "fire" | "switching" | "corrosion" | "damage" | "accident"
-  | "reconstruction" | "maintenance" | "urgent" | "works";
+  | "reconstruction" | "maintenance" | "urgent" | "works"
+  | "avalanche" | "landslide" | "rockfall" | "mudflow" | "snow" | "ice" | "flood";
 
 export interface Strings {
   // --- outage messages ---
-  utility: Record<"water" | "power" | "gas", string>;
+  utility: Record<"water" | "power" | "gas" | "road", string>;
+  roadClosed: string;
+  roadRestored: string;
   finished: (provider: string) => string;
   finishedReply: (icon: string, provider: string) => string;
   emergency: string;
@@ -62,6 +65,8 @@ export interface Strings {
   // --- conversation ---
   help: string;
   menu: { street: string; city: string; subs: string; types: string; now: string; lang: string };
+  followingRoad: (label: string) => string;
+  roadHint: string;
   promptStreet: string;
   promptStreetHint: string;
   streetExample: string;
@@ -96,7 +101,9 @@ const SOURCES_RU =
   "GWP (вода, Тбилиси), Telasi (свет, Тбилиси), Tbilisi Energy (газ, Тбилиси), Energo-Pro (свет, регионы), SOCAR (газ, регионы), water.gov.ge (вода, регионы)";
 
 const ru: Strings = {
-  utility: { water: "Вода", power: "Свет", gas: "Газ" },
+  utility: { water: "Вода", power: "Свет", gas: "Газ", road: "Дороги" },
+  roadClosed: "⛔ Движение ограничено",
+  roadRestored: "✅ Движение восстановлено",
   finished: (p) => `✅ <b>Завершено</b> — ${p} убрал отключение из списка текущих`,
   finishedReply: (icon, p) => `✅ ${icon} По данным ${p}, отключение завершено.`,
   emergency: "⚠️ Аварийное",
@@ -105,6 +112,8 @@ const ru: Strings = {
     fire: "пожар", switching: "переключение в сети", corrosion: "коррозия трубы",
     damage: "повреждение сети", accident: "авария", reconstruction: "реконструкция",
     maintenance: "профилактика", urgent: "срочные работы", works: "работы",
+    avalanche: "лавинная опасность", landslide: "оползень", rockfall: "камнепад", mudflow: "сель",
+    snow: "снегопад", ice: "гололёд", flood: "паводок",
   },
   from: (t) => `с ${t}`,
   until: (t) => `до ${t}`,
@@ -130,6 +139,9 @@ const ru: Strings = {
 <b>На весь город:</b>
 /city Кутаиси
 
+<b>Дороги</b> — перекрытия и восстановление движения:
+/road Гудаури
+
 /list — подписки и удаление
 /types — выбрать воду, свет, газ
 /now — что отключено прямо сейчас
@@ -142,6 +154,8 @@ const ru: Strings = {
     street: "📍 Добавить улицу", city: "🏙 Весь город", subs: "📋 Подписки",
     types: "⚙️ Вода/свет/газ", now: "🔎 Что отключено сейчас", lang: "🌐 Язык",
   },
+  followingRoad: (l) => `✅ Подписка на дороги: <b>${l}</b>. Пришлю, когда там ограничат или восстановят движение.`,
+  roadHint: "Напишите место на дороге: /road Гудаури",
   promptStreet: "📍 Какую улицу добавить?",
   promptStreetHint: "Ответьте на это сообщение названием — по-русски, латиницей или по-грузински. Для другого города: «Батуми, Руставели».",
   streetExample: "Политковская",
@@ -173,7 +187,9 @@ const ru: Strings = {
 };
 
 const en: Strings = {
-  utility: { water: "Water", power: "Power", gas: "Gas" },
+  utility: { water: "Water", power: "Power", gas: "Gas", road: "Roads" },
+  roadClosed: "⛔ Traffic restricted",
+  roadRestored: "✅ Traffic restored",
   finished: (p) => `✅ <b>Over</b> — ${p} has taken it off its list of current outages`,
   finishedReply: (icon, p) => `✅ ${icon} According to ${p}, the outage is over.`,
   emergency: "⚠️ Emergency",
@@ -182,6 +198,8 @@ const en: Strings = {
     fire: "fire", switching: "network switching", corrosion: "pipe corrosion",
     damage: "network damage", accident: "accident", reconstruction: "reconstruction",
     maintenance: "maintenance", urgent: "urgent works", works: "works",
+    avalanche: "avalanche danger", landslide: "landslide", rockfall: "rockfall", mudflow: "mudflow",
+    snow: "snowfall", ice: "ice", flood: "flood",
   },
   from: (t) => `from ${t}`,
   until: (t) => `until ${t}`,
@@ -207,6 +225,9 @@ const en: Strings = {
 <b>A whole city:</b>
 /city Kutaisi
 
+<b>Roads</b> — closures and reopenings:
+/road Gudauri
+
 /list — your subscriptions, and removing them
 /types — water, power, gas
 /now — what is off right now
@@ -219,6 +240,8 @@ Sources: GWP (water, Tbilisi), Telasi (power, Tbilisi), Tbilisi Energy (gas, Tbi
     street: "📍 Add a street", city: "🏙 Whole city", subs: "📋 Subscriptions",
     types: "⚙️ Water/power/gas", now: "🔎 What's off now", lang: "🌐 Language",
   },
+  followingRoad: (l) => `✅ Following roads: <b>${l}</b>. I'll tell you when traffic there is restricted or restored.`,
+  roadHint: "Name a place on the road: /road Gudauri",
   promptStreet: "📍 Which street?",
   promptStreetHint: "Reply to this message with its name — in Latin, Russian or Georgian letters. For another city: “Batumi, Rustaveli”.",
   streetExample: "Politkovskaya",
@@ -251,7 +274,9 @@ Sources: GWP (water, Tbilisi), Telasi (power, Tbilisi), Tbilisi Energy (gas, Tbi
 };
 
 const ka: Strings = {
-  utility: { water: "წყალი", power: "შუქი", gas: "გაზი" },
+  utility: { water: "წყალი", power: "შუქი", gas: "გაზი", road: "გზები" },
+  roadClosed: "⛔ მოძრაობა შეზღუდულია",
+  roadRestored: "✅ მოძრაობა აღდგა",
   finished: (p) => `✅ <b>დასრულდა</b> — ${p}-მ გათიშვა მიმდინარეების სიიდან ამოიღო`,
   finishedReply: (icon, p) => `✅ ${icon} ${p}-ის ცნობით, გათიშვა დასრულდა.`,
   emergency: "⚠️ ავარიული",
@@ -260,6 +285,8 @@ const ka: Strings = {
     fire: "ხანძარი", switching: "ქსელში გადართვა", corrosion: "მილის კოროზია",
     damage: "ქსელის დაზიანება", accident: "ავარია", reconstruction: "რეკონსტრუქცია",
     maintenance: "პროფილაქტიკა", urgent: "გადაუდებელი სამუშაოები", works: "სამუშაოები",
+    avalanche: "ზვავსაშიშროება", landslide: "მეწყერი", rockfall: "ქვაცვენა", mudflow: "ღვარცოფი",
+    snow: "თოვლი", ice: "მოყინვა", flood: "წყალდიდობა",
   },
   from: (t) => `${t}-დან`,
   until: (t) => `${t}-მდე`,
@@ -285,6 +312,9 @@ const ka: Strings = {
 <b>მთელი ქალაქი:</b>
 /city ქუთაისი
 
+<b>გზები</b> — გზების ჩაკეტვა და მოძრაობის აღდგენა:
+/road გუდაური
+
 /list — გამოწერები და მათი წაშლა
 /types — წყალი, შუქი, გაზი
 /now — რა არის გათიშული ახლა
@@ -297,6 +327,8 @@ const ka: Strings = {
     street: "📍 ქუჩის დამატება", city: "🏙 მთელი ქალაქი", subs: "📋 გამოწერები",
     types: "⚙️ წყალი/შუქი/გაზი", now: "🔎 რა არის გათიშული", lang: "🌐 ენა",
   },
+  followingRoad: (l) => `✅ გამოწერილია გზები: <b>${l}</b>. გაცნობებთ, როცა იქ მოძრაობას შეზღუდავენ ან აღადგენენ.`,
+  roadHint: "დაწერეთ ადგილი გზაზე: /road გუდაური",
   promptStreet: "📍 რომელი ქუჩა დავამატო?",
   promptStreetHint: "უპასუხეთ ამ შეტყობინებას ქუჩის სახელით — ქართულად, ლათინურად ან რუსულად. სხვა ქალაქისთვის: „ბათუმი, რუსთაველი“.",
   streetExample: "პოლიტკოვსკაია",

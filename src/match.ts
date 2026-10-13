@@ -1,12 +1,15 @@
 // Which chats an outage concerns, and why.
 import { skel, skeletonize, findKeys, streetKeys } from "./georgian.ts";
 import type { Span } from "./georgian.ts";
+import { wanted } from "./types.ts";
 import type { Outage, Utility } from "./types.ts";
+import { ROADS_CITY } from "./sources/georoad.ts";
 
 export interface Sub {
   id: number;
   chatId: number;
-  kind: "street" | "city";
+  /** A road subscription matches like a street, but against road notices. */
+  kind: "street" | "city" | "road";
   /** City skeleton: "tbilisi". */
   city: string;
   /** What the subscriber typed, shown back to them. */
@@ -33,6 +36,11 @@ export function streetSub(label: string, city = DEFAULT_CITY): Omit<Sub, "id" | 
   return { kind: "street", city: citySkel(city), label: label.trim(), keys: streetKeys(label) };
 }
 
+/** A road, a pass or a village on one: "Гудаури", "Омало". */
+export function roadSub(label: string): Omit<Sub, "id" | "chatId"> {
+  return { kind: "road", city: citySkel(ROADS_CITY), label: label.trim(), keys: streetKeys(label) };
+}
+
 export function citySub(city: string): Omit<Sub, "id" | "chatId"> {
   return { kind: "city", city: citySkel(city), label: city.trim(), keys: [] };
 }
@@ -57,8 +65,8 @@ export function matchOutage(
   let sk: ReturnType<typeof skeletonize> | undefined;
   for (const sub of subs) {
     if (sub.city !== city) continue;
-    if (!utilitiesOf(sub.chatId).includes(o.utility)) continue;
-    if (sub.kind === "street") {
+    if (!wanted(o.utility, utilitiesOf(sub.chatId))) continue;
+    if (sub.kind === "street" || sub.kind === "road") {
       sk ??= skeletonize(text);
       if (findKeys(text, sub.keys, sk).length === 0 && !inCutDistrict(o, sub)) continue;
     }
