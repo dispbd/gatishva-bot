@@ -15,7 +15,7 @@
 // Emergency notices arrive late, and nothing downstream can fix that: on
 // 2026-10-07 notice 5918 was published at 17:54 saying power would be back
 // "by about 17:47". See docs/research.md.
-import { postJson, htmlToText, squash, districtOf, TBILISI } from "./common.ts";
+import { postJson, htmlToText, squash, districtOf, districtFields, TBILISI } from "./common.ts";
 import { splitAddresses } from "../georgian.ts";
 import { parseLocal, kaMonth, yearFor, tbilisiDate, tbilisiEpoch } from "../time.ts";
 import type { Outage, SourceDef } from "../types.ts";
@@ -66,7 +66,7 @@ function liveItem(i: ApiItem): Outage[] {
       provider: "Telasi",
       utility: "power",
       city: TBILISI,
-      district: districtOf(text),
+      ...districtFields(text),
       emergency: true,
       start: parseLocal(i.outage_time) ?? parseLocal(i.date),
       end: parseLocal(i.poweron_time),
@@ -99,7 +99,7 @@ function contentItem(i: ContentItem): Outage[] {
       {
         ...base,
         key: `telasi:${i.id}`,
-        district: districtOf(text),
+        ...districtFields(text),
         emergency: true,
         // No start time: the notice goes out once the lights are already off,
         // and its publication time is shown as exactly that.

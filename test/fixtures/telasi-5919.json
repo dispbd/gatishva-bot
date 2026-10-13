@@ -1,0 +1,30 @@
+{
+ "api": {
+  "list": [],
+  "listCount": 0
+ },
+ "content": {
+  "list": [
+   {
+    "id": 5919,
+    "user_id": 411,
+    "pid": 0,
+    "sort": 0,
+    "created_at": "2026-10-08 14:46:01",
+    "updated_at": "2026-10-08 14:46:01",
+    "date": "2026-10-08 14:46:01",
+    "status": "published",
+    "content_type": "poweroutage",
+    "slug": "08-oqtomberi-eleqtromomaragebis-aragegmuri-tsyveta-avaria",
+    "alert": "0000-00-00 00:00:00",
+    "singlePageRoute": "",
+    "mail_sent": "",
+    "title": "08 ოქტომბერი ელექტრომომარაგების არაგეგმური წყვეტა (ავარია)",
+    "teaser": "გაცნობებთ, რომ საქართველოს ელექტროგადამცემ ქსელში (მაღალი ძაბვის) მომხდარი ავარიის გამო, ელექტრომომარაგება არ მიეწოდება სოლოლაკ-მთაწმინდა-კრწანისა და ისნის რაიონებს",
+    "editor": "<p style=\"text-align:justify;\"><span style=\"background-color:white;color:red;\">08&nbsp;<span lang=\"RU\" dir=\"ltr\">ოქტომბერი&nbsp;</span></span><span style=\"background-color:white;color:#212529;\"><span lang=\"RU\" dir=\"ltr\">ელექტრომომარაგების&nbsp;არაგეგმური&nbsp;წყვეტა (ავარია)</span></span><span style=\"background-color:white;color:#6E6E6D;\"></span></p><p style=\"text-align:justify;\"><span lang=\"GEO/KAT\" dir=\"ltr\">გაცნობებთ</span><span>,&nbsp;</span><span style=\"background-color:white;color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">რომ&nbsp;</span></span><span style=\"background-color:white;color:#080809;\"><span lang=\"RU\" dir=\"ltr\">საქართველოს ელექტროგადამცემ&nbsp;ქსელში (მაღალი&nbsp;ძაბვის) </span></span><span style=\"background-color:white;color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">მომხდარი&nbsp;ავარიის&nbsp;გამო,&nbsp;ელექტრომომარაგება&nbsp;არ&nbsp;მიეწოდება&nbsp;სოლოლაკ-მთაწმინდა-კრწანისა&nbsp;და&nbsp;ისნის&nbsp;რაიონებს</span></span></p><p style=\"text-align:justify;\">&nbsp;</p><p style=\"margin-left:0in;\"><span style=\"color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">ელექტრომომარაგების&nbsp;აღდგენის&nbsp;სავარაუდო&nbsp;დრო: </span></span><span style=\"color:red;\"><span lang=\"GEO/KAT\" dir=\"ltr\">0</span>8<span lang=\"GEO/KAT\" dir=\"ltr\">.10.2026&nbsp;</span>13<span lang=\"GEO/KAT\" dir=\"ltr\">:4</span>0</span><span style=\"color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">სთ.</span></span></p><p style=\"margin-left:0in;\"><span style=\"color:#6E6E6D;\"><span lang=\"GEO/KAT\" dir=\"ltr\">კომპანია&nbsp;ბოდიშს&nbsp;უხდის&nbsp;მომხმარებლებს&nbsp;შექმნილი&nbsp;დისკომფორტის&nbsp;გამო. სამუშაოების&nbsp;დასრულების&nbsp;შემდეგ&nbsp;აბონენტებს&nbsp;ელექტრომომარაგება&nbsp;აღუდგება.</span></span></p><p style=\"text-align:justify;\">&nbsp;</p>",
+    "localisedto": "ka"
+   }
+  ],
+  "listCount": 1
+ }
+}

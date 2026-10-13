@@ -17,6 +17,8 @@ export interface Outage {
   city: string;
   /** Georgian district name in the nominative, when the provider gives one. */
   district?: string;
+  /** Every district, when the notice names more than one; `district` is the first. */
+  districts?: string[];
   emergency: boolean;
   /** Epoch seconds. Absent when the provider does not say. */
   start?: number;

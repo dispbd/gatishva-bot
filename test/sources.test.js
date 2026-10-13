@@ -6,6 +6,7 @@ import { parseGwp, gwpTimes, gwpDate } from "../src/sources/gwp.ts";
 import { parseTelasi, telasiEta } from "../src/sources/telasi.ts";
 import { parseEnergo, parseSocar, parseUwsc, energoPlace } from "../src/sources/regions.ts";
 import { teLinks, parseTeArticle } from "../src/sources/te.ts";
+import { districtsOf } from "../src/sources/common.ts";
 import { tbilisiEpoch, fmtRange } from "../src/time.ts";
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
@@ -93,4 +94,20 @@ test("Tbilisi Energy: newest post ids from the listing, times out of the prose",
   assert.equal(o.emergency, false);
   assert.equal(fmtRange(o.start, o.end), "29.09 11:30 – 30.09 14:00");
   assert.match(o.text, /კოჯორი/);
+});
+
+test("Telasi: a fault that cuts whole districts names them all, in the nominative", () => {
+  // Notice 5919 of 8 October: a high-voltage fault, no streets at all.
+  const [o] = parseTelasi(fixture("telasi-5919.json"), NOW);
+  assert.deepEqual(o.districts, ["სოლოლაკ-მთაწმინდა-კრწანისი", "ისანი"]);
+  assert.equal(o.district, "სოლოლაკ-მთაწმინდა-კრწანისი");
+  assert.deepEqual(o.addresses, []);
+});
+
+test("district names come out of every case form the notices use", () => {
+  assert.deepEqual(districtsOf("ვარკეთილის რაიონის შემდეგ ქუჩებს"), ["ვარკეთილი"]);
+  assert.deepEqual(districtsOf("მთაწმინდისა და კრწანისის რაიონებში"), ["მთაწმინდა", "კრწანისი"]);
+  assert.deepEqual(districtsOf("არ მიეწოდება დიღმის, ვაკის და ისნის რაიონებს"), ["დიღომი", "ვაკე", "ისანი"]);
+  assert.deepEqual(districtsOf("მთაწმინდა-კრწანისის რაიონის"), ["მთაწმინდა-კრწანისი"]);
+  assert.deepEqual(districtsOf("შეზღუდვა შეეხება ქუჩებს"), []);
 });

@@ -4,7 +4,7 @@
 // a handful a month. Each page carries links to the latest posts, whose ids
 // only grow, so one listing page plus the few newest articles is a full poll.
 // The CDN in front answers 403 without a browser User-Agent.
-import { fetchText, htmlToText, squash, decodeEntities, districtOf, looksEmergency, preamble, TBILISI } from "./common.ts";
+import { fetchText, htmlToText, squash, decodeEntities, districtFields, looksEmergency, preamble, TBILISI } from "./common.ts";
 import { kaDateTimes, kaMonth, tbilisiEpoch } from "../time.ts";
 import type { Outage, SourceDef } from "../types.ts";
 
@@ -38,7 +38,7 @@ export function parseTeArticle(id: number, url: string, html: string): Outage | 
     provider: "Tbilisi Energy",
     utility: "gas",
     city: TBILISI,
-    district: districtOf(`${title} ${text}`),
+    ...districtFields(`${title} ${text}`),
     emergency: looksEmergency(`${title} ${preamble(text)}`) && !/სარეკონსტრუქციო|სარეაბილიტაციო|დაგეგმ/.test(title),
     start: times[0],
     end: times[1],

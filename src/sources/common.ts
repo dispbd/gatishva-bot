@@ -102,11 +102,11 @@ export function preamble(text: string): string {
 }
 
 /**
- * Tbilisi districts in the genitive, as the texts name them ("საბურთალოს
- * რაიონის"), mapped to the nominative. Several shorten their stem in the
- * genitive — ისანი → ისნის, დიღომი → დიღმის — so no suffix rule gets them all.
+ * Tbilisi districts in the case forms the texts use ("საბურთალოს რაიონის"),
+ * mapped to the nominative. Several shorten their stem — ისანი → ისნის,
+ * დიღომი → დიღმის — so no suffix rule gets them all.
  */
-const DISTRICT_GENITIVE: Record<string, string> = {
+const DISTRICT_FORMS: Record<string, string> = {
   "გლდანის": "გლდანი",
   "ნაძალადევის": "ნაძალადევი",
   "დიდუბის": "დიდუბე",
@@ -114,23 +114,62 @@ const DISTRICT_GENITIVE: Record<string, string> = {
   "საბურთალოს": "საბურთალო",
   "ვაკის": "ვაკე",
   "მთაწმინდის": "მთაწმინდა",
+  "მთაწმინდისა": "მთაწმინდა",
   "კრწანისის": "კრწანისი",
   "ისნის": "ისანი",
+  "ისნისა": "ისანი",
   "სამგორის": "სამგორი",
   "ვარკეთილის": "ვარკეთილი",
   "დიღმის": "დიღომი",
-  "მთაწმინდა-კრწანისის": "მთაწმინდა-კრწანისი",
-  "ვაკე-საბურთალოს": "ვაკე-საბურთალო",
-  "დიდუბე-ჩუღურეთის": "დიდუბე-ჩუღურეთი",
-  "ისანი-სამგორის": "ისანი-სამგორი",
-  "გლდანი-ნაძალადევის": "გლდანი-ნაძალადევი",
 };
 
-/** The district a Telasi/TE notice names, nominative, or undefined. */
+/**
+ * One district name as a notice writes it, put into the nominative. A compound
+ * name inflects only its last part: "სოლოლაკ-მთაწმინდა-კრწანისის".
+ */
+export function districtName(word: string): string {
+  const parts = word.split("-");
+  const last = parts.pop()!;
+  const nominative =
+    DISTRICT_FORMS[last] ??
+    last
+      .replace(/ისა$/, "ისი") // "კრწანისა და ისნის": the form before "and"
+      .replace(/ის$/, "ი")
+      .replace(/([აეოუ])ს$/, "$1");
+  return [...parts, nominative].join("-");
+}
+
+/**
+ * Every district a notice names, nominative, in order: "საბურთალოს რაიონის"
+ * gives one, "სოლოლაკ-მთაწმინდა-კრწანისა და ისნის რაიონებს" two. A list is
+ * names joined by commas or "და" ("and"), directly before the word "district"
+ * in any of its forms, so the words that come before the list are not caught.
+ */
+export function districtsOf(text: string): string[] {
+  const m =
+    /((?:[ა-ჿ-]+(?:\s*,\s*|\s+და\s+))*[ა-ჿ-]+)\s+(?:რაიონებს|რაიონებში|რაიონების|რაიონის|რაიონში|რაიონს|რ-ში|რ-ნის)(?![ა-ჿ])/.exec(
+      text,
+    );
+  if (!m) return [];
+  return m[1]!
+    .split(/\s*,\s*|\s+და\s+/)
+    .filter(Boolean)
+    .map(districtName);
+}
+
+/**
+ * The district fields of an Outage: the first district, and the whole list
+ * when a notice names more than one — a high-voltage fault can take out
+ * "Sololaki-Mtatsminda-Krtsanisi and Isani" at once.
+ */
+export function districtFields(text: string): { district?: string; districts?: string[] } {
+  const all = districtsOf(text);
+  return { district: all[0], districts: all.length > 1 ? all : undefined };
+}
+
+/** The first district a notice names, or undefined. */
 export function districtOf(text: string): string | undefined {
-  const m = /([ა-ჿ-]+)\s+(?:რაიონის|რაიონში|რაიონებში|რ-ში|რ-ნის)/.exec(text);
-  if (!m) return undefined;
-  return DISTRICT_GENITIVE[m[1]!] ?? m[1]!.replace(/ის$/, "ი").replace(/ს$/, "");
+  return districtsOf(text)[0];
 }
 
 export const TBILISI = "თბილისი";

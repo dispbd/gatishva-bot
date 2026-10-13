@@ -81,3 +81,9 @@ test("'Батуми, Руставели' is a street in Batumi; 'Руставе�
   assert.deepEqual(splitCityStreet("Политковская, 32", []), { street: "Политковская, 32" });
   assert.equal(resolveCity("Зестафони", []), "ზესტაფონი");
 });
+
+test("a notice for several districts names them all in the header", () => {
+  const [o] = parseTelasi(fixture("telasi-5919.json"), NOW);
+  const html = renderOutage(o, []);
+  assert.equal(html.split("\n")[0], "💡 <b>Свет · Тбилиси, Сололак-Мтацминда-Крцаниси и Исани</b>");
+});

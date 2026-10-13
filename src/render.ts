@@ -60,7 +60,8 @@ export interface RenderState {
 
 export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): string {
   const streetSubs = subs.filter((s) => s.kind === "street");
-  const place = [translitRu(o.city), o.district && translitRu(o.district)].filter(Boolean).join(", ");
+  const districts = o.districts ?? (o.district ? [o.district] : []);
+  const place = [translitRu(o.city), districts.map(translitRu).join(" и ")].filter(Boolean).join(", ");
 
   const head: string[] = [];
   if (state.finished) head.push(`✅ <b>Завершено</b> — ${escapeHtml(o.provider)} убрал отключение из списка текущих`);
