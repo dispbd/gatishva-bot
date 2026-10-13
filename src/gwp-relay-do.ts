@@ -12,7 +12,7 @@
 // Madrid roughly one time in three. So the Hub creates relays until one reaches
 // GWP, remembers its name, and starts over only if that one stops working.
 import { DurableObject } from "cloudflare:workers";
-import { BROWSER_UA } from "./sources/common.ts";
+import { BROWSER_UA, fetchWithin } from "./sources/common.ts";
 import { describe } from "./telegram.ts";
 import type { GwpPath } from "./types.ts";
 
@@ -30,13 +30,16 @@ export class GwpRelay extends DurableObject<Env> {
 
   async fetchGwp(path: GwpPath): Promise<RelayResult> {
     this.colo ??= await whereAmI();
+    const colo = this.colo;
     try {
-      const r = await fetch(`https://www.gwp.ge/api/${path}`, {
-        headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
-        signal: AbortSignal.timeout(8_000),
-      });
-      if (!r.ok) return { ok: false, colo: this.colo, error: `HTTP ${r.status}` };
-      return { ok: true, colo: this.colo, body: await r.text() };
+      // A deadline that is lifted on answer: see fetchWithin.
+      return await fetchWithin(
+        `https://www.gwp.ge/api/${path}`,
+        { headers: { "User-Agent": BROWSER_UA, Accept: "application/json" } },
+        8_000,
+        async (r): Promise<RelayResult> =>
+          r.ok ? { ok: true, colo, body: await r.text() } : { ok: false, colo, error: `HTTP ${r.status}` },
+      );
     } catch (e) {
       return { ok: false, colo: this.colo, error: describe(e) };
     }

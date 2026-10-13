@@ -10,15 +10,38 @@ export const BROWSER_UA =
 
 const TIMEOUT_MS = 15_000;
 
+/**
+ * fetch with a deadline that is lifted the moment the answer is in.
+ *
+ * Not AbortSignal.timeout: its timer cannot be cancelled, and a pending timer
+ * keeps a Worker's invocation alive. Every poll lasted exactly 15 s of wall
+ * time (and every GWP relay call exactly 8 s) for a few hundred milliseconds
+ * of work, spending the Durable Object's free duration on waiting for timers
+ * that had nothing left to cancel. `read` runs inside the deadline too, so a
+ * body that stalls halfway is cut off as well.
+ */
+export async function fetchWithin<T>(
+  url: string,
+  init: RequestInit,
+  ms: number,
+  read: (r: Response) => Promise<T>,
+): Promise<T> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(new Error(`${url} took longer than ${ms} ms`)), ms);
+  try {
+    return await read(await fetch(url, { ...init, signal: ctl.signal }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Fetch text, failing loudly on anything but a 2xx — a parser fed an error page would report "no outages". */
-export async function fetchText(url: string, init: RequestInit = {}): Promise<string> {
-  const r = await fetch(url, {
-    ...init,
-    headers: { "User-Agent": BROWSER_UA, ...(init.headers as Record<string, string> | undefined) },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+export function fetchText(url: string, init: RequestInit = {}): Promise<string> {
+  const headers = { "User-Agent": BROWSER_UA, ...(init.headers as Record<string, string> | undefined) };
+  return fetchWithin(url, { ...init, headers }, TIMEOUT_MS, async (r) => {
+    if (!r.ok) throw new Error(`${url} answered ${r.status}`);
+    return await r.text();
   });
-  if (!r.ok) throw new Error(`${url} answered ${r.status}`);
-  return await r.text();
 }
 
 /**
