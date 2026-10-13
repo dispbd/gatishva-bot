@@ -513,7 +513,10 @@ export class Hub extends DurableObject<Env> {
     if (op === "finished") {
       await tg(this.env, "sendMessage", {
         chat_id: chatId,
-        text: t(lang).finishedReply(UTILITY_ICON[o.utility], escapeHtml(o.provider)),
+        text:
+          o.utility === "weather"
+            ? t(lang).warningLiftedReply(UTILITY_ICON[o.utility], escapeHtml(o.provider))
+            : t(lang).finishedReply(UTILITY_ICON[o.utility], escapeHtml(o.provider)),
         parse_mode: "HTML",
         disable_notification: true,
         reply_parameters: { message_id: sent.message_id, allow_sending_without_reply: true },

@@ -1,7 +1,11 @@
 /** What an outage cuts off. Roads are no utility, but they travel the same path. */
-export type Utility = "water" | "power" | "gas" | "road";
+export type Utility = "water" | "power" | "gas" | "road" | "weather";
 
-/** The utilities a chat switches on and off in /types. Roads come by road subscription only. */
+/**
+ * The utilities a chat switches on and off in /types. Roads come by road
+ * subscription only, and weather warnings to anyone following a place they
+ * cover: a storm warning is not something to opt out of by accident.
+ */
 export const UTILITIES: Utility[] = ["water", "power", "gas"];
 
 /** Whether a chat with `on` switched on wants outages of `u`. */
@@ -39,6 +43,8 @@ export interface Outage {
   place?: string;
   /** The notice itself says it is over: "traffic restored". */
   over?: boolean;
+  /** A weather warning's danger level, 1 (yellow) to 3 (red). */
+  level?: 1 | 2 | 3;
   emergency: boolean;
   /** Epoch seconds. Absent when the provider does not say. */
   start?: number;

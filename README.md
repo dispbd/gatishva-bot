@@ -50,6 +50,7 @@ privacy mode: он видит только команды и ответы на �
 | Energo-Pro | свет, регионы | JSON `my.energo-pro.ge/owback/searchAlerts` | 2 мин |
 | SOCAR Georgia Gas | газ, регионы | JSON API за `mygas.ge` | 5 мин |
 | UWSC | вода, регионы | JSON `water.gov.ge/api/v1/site/planned-works` | 5 мин |
+| NEA (meteo.gov.ge) | опасная погода, по муниципалитетам | JSON `meteo.gov.ge/Ge/Warnings/GetMap`; 11 МБ, почти всё — контуры муниципалитетов, вырезаются сразу | 1 ч |
 | Департамент автодорог | перекрытия дорог | данные Next.js-страницы `georoad.gov.ge/ka/restriction` (`parsedData`): статус 1 — ограничено, 2 — восстановлено | 5 мин |
 
 `npm run probe` опрашивает все источники один раз и показывает, что пришло, — первое, что

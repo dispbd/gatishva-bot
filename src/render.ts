@@ -17,7 +17,7 @@ import { escapeHtml } from "./telegram.ts";
 import { fmtDateTime, fmtRange, TBILISI_OFFSET_SEC } from "./time.ts";
 import type { Outage, Utility } from "./types.ts";
 
-export const UTILITY_ICON: Record<Utility, string> = { water: "💧", power: "💡", gas: "🔥", road: "🚧" };
+export const UTILITY_ICON: Record<Utility, string> = { water: "💧", power: "💡", gas: "🔥", road: "🚧", weather: "⛈" };
 
 /** Telegram's limit is 4096 characters of visible text; this leaves headroom. */
 const LIMIT = 4000;
@@ -42,6 +42,15 @@ const REASONS: [RegExp, Reason][] = [
   [/პროფილაქტ/, "maintenance"],
   [/გადაუდებ/, "urgent"],
   [/სამუშაო/, "works"],
+  // Weather warnings' own words, after the rest: a utility notice may mention
+  // the rain that caused the damage, and the damage is what it is about.
+  [/შტორმ/, "storm"],
+  [/სეტყვ/, "hail"],
+  [/ჭექა|ელჭექ/, "thunder"],
+  [/ქარ(?!თ)/, "wind"],
+  [/წვიმ|ნალექ/, "rain"],
+  [/სიცხ|სიცხე|ცხელ/, "heat"],
+  [/წაყინვ|ყინვ/, "frost"],
 ];
 
 export function reasonOf(o: Outage, lang: Lang = "ru"): string | undefined {
@@ -84,12 +93,18 @@ export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): s
     : [translit(o.city, lang), districts.map((d) => translit(d, lang)).join(S.and)].filter(Boolean).join(", ");
 
   const head: string[] = [];
-  if (state.finished) head.push(S.finished(escapeHtml(o.provider)));
+  if (state.finished) {
+    head.push(o.utility === "weather" ? S.warningLifted(escapeHtml(o.provider)) : S.finished(escapeHtml(o.provider)));
+  }
   head.push(`${UTILITY_ICON[o.utility]} <b>${S.utility[o.utility]} · ${escapeHtml(place)}</b>`);
 
   const reason = reasonOf(o, lang);
   const kind =
-    o.utility === "road" ? (o.over ? S.roadRestored : S.roadClosed) : o.emergency ? S.emergency : S.planned;
+    o.utility === "road"
+      ? o.over ? S.roadRestored : S.roadClosed
+      : o.utility === "weather"
+        ? S.level[(o.level ?? 1) - 1]!
+        : o.emergency ? S.emergency : S.planned;
   head.push(reason ? `${kind} · ${reason}` : kind);
 
   const when = timeLine(o, lang);

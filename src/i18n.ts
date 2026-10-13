@@ -41,11 +41,16 @@ function ruPlural(n: number, one: string, few: string, many: string): string {
 export type Reason =
   | "fire" | "switching" | "corrosion" | "damage" | "accident"
   | "reconstruction" | "maintenance" | "urgent" | "works"
-  | "avalanche" | "landslide" | "rockfall" | "mudflow" | "snow" | "ice" | "flood";
+  | "avalanche" | "landslide" | "rockfall" | "mudflow" | "snow" | "ice" | "flood"
+  | "wind" | "storm" | "rain" | "hail" | "thunder" | "heat" | "frost";
 
 export interface Strings {
   // --- outage messages ---
-  utility: Record<"water" | "power" | "gas" | "road", string>;
+  utility: Record<"water" | "power" | "gas" | "road" | "weather", string>;
+  /** Danger levels 1-3 of a weather warning. */
+  level: [string, string, string];
+  warningLifted: (provider: string) => string;
+  warningLiftedReply: (icon: string, provider: string) => string;
   roadClosed: string;
   roadRestored: string;
   finished: (provider: string) => string;
@@ -101,7 +106,10 @@ const SOURCES_RU =
   "GWP (вода, Тбилиси), Telasi (свет, Тбилиси), Tbilisi Energy (газ, Тбилиси), Energo-Pro (свет, регионы), SOCAR (газ, регионы), water.gov.ge (вода, регионы)";
 
 const ru: Strings = {
-  utility: { water: "Вода", power: "Свет", gas: "Газ", road: "Дороги" },
+  utility: { water: "Вода", power: "Свет", gas: "Газ", road: "Дороги", weather: "Опасная погода" },
+  level: ["🟡 Опасность низкая", "🟠 Опасность средняя", "🔴 Опасность высокая"],
+  warningLifted: (p) => `✅ <b>Отменено</b> — ${p} снял предупреждение`,
+  warningLiftedReply: (icon, p) => `✅ ${icon} ${p} снял предупреждение.`,
   roadClosed: "⛔ Движение ограничено",
   roadRestored: "✅ Движение восстановлено",
   finished: (p) => `✅ <b>Завершено</b> — ${p} убрал отключение из списка текущих`,
@@ -114,6 +122,7 @@ const ru: Strings = {
     maintenance: "профилактика", urgent: "срочные работы", works: "работы",
     avalanche: "лавинная опасность", landslide: "оползень", rockfall: "камнепад", mudflow: "сель",
     snow: "снегопад", ice: "гололёд", flood: "паводок",
+    wind: "сильный ветер", storm: "шторм", rain: "ливни", hail: "град", thunder: "гроза", heat: "жара", frost: "заморозки",
   },
   from: (t) => `с ${t}`,
   until: (t) => `до ${t}`,
@@ -141,6 +150,8 @@ const ru: Strings = {
 
 <b>Дороги</b> — перекрытия и восстановление движения:
 /road Гудаури
+
+<b>Опасная погода</b> — предупреждения метеослужбы (шторм, ливни, сели, оползни) приходят сами, если вы подписаны на улицу или город в этом муниципалитете.
 
 /list — подписки и удаление
 /types — выбрать воду, свет, газ
@@ -187,7 +198,10 @@ const ru: Strings = {
 };
 
 const en: Strings = {
-  utility: { water: "Water", power: "Power", gas: "Gas", road: "Roads" },
+  utility: { water: "Water", power: "Power", gas: "Gas", road: "Roads", weather: "Severe weather" },
+  level: ["🟡 Low danger", "🟠 Medium danger", "🔴 High danger"],
+  warningLifted: (p) => `✅ <b>Lifted</b> — ${p} has withdrawn the warning`,
+  warningLiftedReply: (icon, p) => `✅ ${icon} ${p} has withdrawn the warning.`,
   roadClosed: "⛔ Traffic restricted",
   roadRestored: "✅ Traffic restored",
   finished: (p) => `✅ <b>Over</b> — ${p} has taken it off its list of current outages`,
@@ -200,6 +214,7 @@ const en: Strings = {
     maintenance: "maintenance", urgent: "urgent works", works: "works",
     avalanche: "avalanche danger", landslide: "landslide", rockfall: "rockfall", mudflow: "mudflow",
     snow: "snowfall", ice: "ice", flood: "flood",
+    wind: "strong wind", storm: "storm", rain: "heavy rain", hail: "hail", thunder: "thunderstorm", heat: "heat", frost: "frost",
   },
   from: (t) => `from ${t}`,
   until: (t) => `until ${t}`,
@@ -227,6 +242,8 @@ const en: Strings = {
 
 <b>Roads</b> — closures and reopenings:
 /road Gudauri
+
+<b>Severe weather</b> — the weather service's warnings (storms, heavy rain, mudflows, landslides) come by themselves to anyone following a street or city in that municipality.
 
 /list — your subscriptions, and removing them
 /types — water, power, gas
@@ -274,7 +291,10 @@ Sources: GWP (water, Tbilisi), Telasi (power, Tbilisi), Tbilisi Energy (gas, Tbi
 };
 
 const ka: Strings = {
-  utility: { water: "წყალი", power: "შუქი", gas: "გაზი", road: "გზები" },
+  utility: { water: "წყალი", power: "შუქი", gas: "გაზი", road: "გზები", weather: "საშიში ამინდი" },
+  level: ["🟡 საფრთხის დონე დაბალი", "🟠 საფრთხის დონე საშუალო", "🔴 საფრთხის დონე მაღალი"],
+  warningLifted: (p) => `✅ <b>გაუქმდა</b> — ${p}-მ გაფრთხილება მოხსნა`,
+  warningLiftedReply: (icon, p) => `✅ ${icon} ${p}-მ გაფრთხილება მოხსნა.`,
   roadClosed: "⛔ მოძრაობა შეზღუდულია",
   roadRestored: "✅ მოძრაობა აღდგა",
   finished: (p) => `✅ <b>დასრულდა</b> — ${p}-მ გათიშვა მიმდინარეების სიიდან ამოიღო`,
@@ -287,6 +307,7 @@ const ka: Strings = {
     maintenance: "პროფილაქტიკა", urgent: "გადაუდებელი სამუშაოები", works: "სამუშაოები",
     avalanche: "ზვავსაშიშროება", landslide: "მეწყერი", rockfall: "ქვაცვენა", mudflow: "ღვარცოფი",
     snow: "თოვლი", ice: "მოყინვა", flood: "წყალდიდობა",
+    wind: "ძლიერი ქარი", storm: "შტორმი", rain: "ძლიერი წვიმა", hail: "სეტყვა", thunder: "ჭექა-ქუხილი", heat: "სიცხე", frost: "წაყინვა",
   },
   from: (t) => `${t}-დან`,
   until: (t) => `${t}-მდე`,
@@ -314,6 +335,8 @@ const ka: Strings = {
 
 <b>გზები</b> — გზების ჩაკეტვა და მოძრაობის აღდგენა:
 /road გუდაური
+
+<b>საშიში ამინდი</b> — მეტეოსამსახურის გაფრთხილებები (შტორმი, ძლიერი წვიმა, ღვარცოფი, მეწყერი) თავად მოგივათ, თუ ამ მუნიციპალიტეტში ქუჩა ან ქალაქი გაქვთ გამოწერილი.
 
 /list — გამოწერები და მათი წაშლა
 /types — წყალი, შუქი, გაზი
