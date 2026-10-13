@@ -37,6 +37,14 @@ const SENDS_PER_RUN = 5;
 const ALERT_AFTER_FAILURES = 10;
 /** Forget outages nobody has seen for this long. */
 const KEEP_EVENTS_SEC = 30 * 86400;
+/**
+ * How stale `last_seen` may get before a poll refreshes it. It only decides
+ * when an outage is old enough to forget, a month on, so to the minute is
+ * wasted precision — and refreshing it on every poll rewrote every row of a
+ * list whenever one item in it changed: Energo-Pro's hundred rows, about
+ * every two minutes, against the free plan's 100,000 rows written a day.
+ */
+const LAST_SEEN_EVERY_SEC = 6 * 3600;
 /** Runaway guard, not a quota: "as many streets as you like" is the promise. */
 export const MAX_SUBS_PER_CHAT = 200;
 /** A relay that failed this many times in a row is replaced. */
@@ -327,7 +335,12 @@ export class Hub extends DurableObject<Env> {
     for (const o of outages) {
       seen.add(o.key);
       const fp = fingerprint(o);
-      const prev = this.rows<EventRow>(`SELECT * FROM events WHERE key = ?`, o.key)[0];
+      // The stored notice itself is not needed to tell whether it changed: the
+      // fingerprint is, and leaving `data` out spares copying a hundred texts
+      // out of the database on every poll.
+      const prev = this.rows<Pick<EventRow, "fp" | "missing" | "finished_at"> & { last_seen: number }>(
+        `SELECT fp, missing, finished_at, last_seen FROM events WHERE key = ?`, o.key,
+      )[0];
       if (!prev) {
         this.sql.exec(
           `INSERT INTO events (key, source, city, fp, data, first_seen, last_seen, published_at, first_read, current_until)
@@ -340,8 +353,12 @@ export class Hub extends DurableObject<Env> {
         if (!firstRead && isCurrent(o, now, source.live(o.key))) queued += this.queueMatches(o, subs, utilitiesOf, "new");
         continue;
       }
-      // Back on a live list after being called over: it is not over after all.
-      this.sql.exec(`UPDATE events SET last_seen = ?, missing = 0, finished_at = NULL WHERE key = ?`, now, o.key);
+      // Written only when something is to be said: it is back on a live list
+      // after being called over (not over after all), it had been missing
+      // from one, or `last_seen` has gone stale.
+      if (prev.finished_at !== null || prev.missing !== 0 || now - prev.last_seen >= LAST_SEEN_EVERY_SEC) {
+        this.sql.exec(`UPDATE events SET last_seen = ?, missing = 0, finished_at = NULL WHERE key = ?`, now, o.key);
+      }
       if (prev.fp === fp && prev.finished_at === null) continue;
       this.sql.exec(
         `UPDATE events SET fp = ?, data = ?, current_until = ? WHERE key = ?`,
