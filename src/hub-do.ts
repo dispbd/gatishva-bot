@@ -13,14 +13,14 @@
 // The flow on every alarm:  poll due sources → diff → outbox → drain → re-arm.
 import { DurableObject } from "cloudflare:workers";
 import { SOURCES, sourceByName } from "./sources/index.ts";
-import { matchOutage, streetSub, citySub, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
+import { matchOutage, streetSub, citySub, roadSub, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
 import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH, UNTIL_FINISHED } from "./diff.ts";
 import { findKeys, translit } from "./georgian.ts";
 import { tg, describe, isChatGone, isNotModified, TelegramError, escapeHtml } from "./telegram.ts";
 import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts";
-import { UTILITIES } from "./types.ts";
+import { UTILITIES, wanted } from "./types.ts";
 import type { Outage, Utility, SourceDef, GwpPath } from "./types.ts";
 import type { RelayResult } from "./gwp-relay-do.ts";
 import { t, isLang } from "./i18n.ts";
@@ -662,6 +662,12 @@ export class Hub extends DurableObject<Env> {
     return this.add(chat, sub, district);
   }
 
+  async addRoad(chat: ChatInfo, label: string): Promise<AddResult> {
+    const sub = roadSub(label);
+    if (sub.keys.length === 0) return { ok: false, error: "too_short", current: 0, examples: [], districts: [] };
+    return this.add(chat, sub);
+  }
+
   async addCity(chat: ChatInfo, city: string): Promise<AddResult> {
     return this.add(chat, citySub(city));
   }
@@ -706,6 +712,7 @@ export class Hub extends DurableObject<Env> {
         const hit = o.addresses.find((a) => findKeys(a, sub.keys).length);
         if (hit) examples.add(hit);
       }
+      if (sub.kind === "road" && examples.size < 3 && o.place) examples.add(o.place);
       const source = sourceByName(ev.source);
       if (
         ev.finished_at === null && source && isCurrent(o, now, source.live(o.key)) &&
@@ -738,12 +745,12 @@ export class Hub extends DurableObject<Env> {
     // Only what is current, by the index, and only in the chat's cities. The
     // regions alone keep a couple of hundred planned works current days ahead;
     // a chat that follows Tbilisi should not parse every one of them.
-    const wanted = new Set(subs.map((s) => s.city));
+    const subCities = new Set(subs.map((s) => s.city));
     const cities = this.rows<{ city: string }>(
       `SELECT DISTINCT city FROM events WHERE current_until > ? AND finished_at IS NULL`, now,
     )
       .map((r) => r.city)
-      .filter((c) => wanted.has(citySkel(c)));
+      .filter((c) => subCities.has(citySkel(c)));
     if (cities.length === 0) return 0;
     const rows = this.rows<EventRow>(
       `SELECT * FROM events WHERE current_until > ? AND finished_at IS NULL
@@ -757,7 +764,7 @@ export class Hub extends DurableObject<Env> {
     const utilities = utilitiesOf(chatId);
     for (const ev of rows) {
       const o = JSON.parse(ev.data) as Outage;
-      if (!utilities.includes(o.utility)) continue;
+      if (!wanted(o.utility, utilities)) continue;
       if (!wholeCities.has(citySkel(o.city)) && !matchOutage(o, streets, utilitiesOf).has(chatId)) continue;
       this.enqueue(chatId, o.key, "repeat");
       if (++n >= 15) break;

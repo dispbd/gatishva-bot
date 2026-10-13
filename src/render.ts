@@ -17,7 +17,7 @@ import { escapeHtml } from "./telegram.ts";
 import { fmtDateTime, fmtRange, TBILISI_OFFSET_SEC } from "./time.ts";
 import type { Outage, Utility } from "./types.ts";
 
-export const UTILITY_ICON: Record<Utility, string> = { water: "💧", power: "💡", gas: "🔥" };
+export const UTILITY_ICON: Record<Utility, string> = { water: "💧", power: "💡", gas: "🔥", road: "🚧" };
 
 /** Telegram's limit is 4096 characters of visible text; this leaves headroom. */
 const LIMIT = 4000;
@@ -25,6 +25,15 @@ const LIMIT = 4000;
 /** The cause, from the Georgian wording. First match wins, most specific first. */
 const REASONS: [RegExp, Reason][] = [
   [/ხანძ/, "fire"],
+  // Hazards come before the generic words: a road "damaged by a landslide"
+  // should say landslide.
+  [/ზვავ/, "avalanche"],
+  [/მეწყერ/, "landslide"],
+  [/ქვაცვენ|კლდეზვავ/, "rockfall"],
+  [/ღვარცოფ/, "mudflow"],
+  [/წყალდიდ|წყალმოვარდ/, "flood"],
+  [/თოვ/, "snow"],
+  [/ლიპყინულ|მოყინვ|ყინულ/, "ice"],
   [/გადართვ/, "switching"],
   [/კოროზი/, "corrosion"],
   [/დაზიან/, "damage"],
@@ -67,18 +76,20 @@ export interface RenderState {
 export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): string {
   const lang = state.lang ?? "ru";
   const S = t(lang);
-  const streetSubs = subs.filter((s) => s.kind === "street");
+  // Road subscriptions read like street ones: the reader's place, in bold.
+  const streetSubs = subs.filter((s) => s.kind !== "city");
   const districts = o.districts ?? (o.district ? [o.district] : []);
-  const place = [translit(o.city, lang), districts.map((d) => translit(d, lang)).join(S.and)]
-    .filter(Boolean)
-    .join(", ");
+  const place = o.place
+    ? addressLocal(o.place, lang)
+    : [translit(o.city, lang), districts.map((d) => translit(d, lang)).join(S.and)].filter(Boolean).join(", ");
 
   const head: string[] = [];
   if (state.finished) head.push(S.finished(escapeHtml(o.provider)));
   head.push(`${UTILITY_ICON[o.utility]} <b>${S.utility[o.utility]} · ${escapeHtml(place)}</b>`);
 
   const reason = reasonOf(o, lang);
-  const kind = o.emergency ? S.emergency : S.planned;
+  const kind =
+    o.utility === "road" ? (o.over ? S.roadRestored : S.roadClosed) : o.emergency ? S.emergency : S.planned;
   head.push(reason ? `${kind} · ${reason}` : kind);
 
   const when = timeLine(o, lang);
