@@ -8,7 +8,12 @@ import type { Outage } from "./types.ts";
  * that has it. The provider's padding and link do not count.
  */
 export function fingerprint(o: Outage): string {
-  return JSON.stringify([o.text, o.start ?? 0, o.end ?? 0, o.emergency, o.addresses.length]);
+  const base = [o.text, o.start ?? 0, o.end ?? 0, o.emergency, o.addresses.length];
+  // A residents' signal changes by its count and its confirmation alone; both
+  // must reach the chats that have it. Appended only for signals, so every
+  // provider outage keeps the fingerprint it was stored with.
+  const r = o.reports;
+  return JSON.stringify(r ? [...base, r.count, r.confirmedBy ?? null] : base);
 }
 
 /** How long after publication an outage with no end time still counts as news. */

@@ -50,6 +50,22 @@ export interface Strings {
   /** Danger levels 1-3 of a weather warning. */
   level: [string, string, string];
   warningLifted: (provider: string) => string;
+  // --- residents' reports ---
+  reportsKind: (people: number, minutes: number) => string;
+  reportsUnconfirmed: string;
+  reportsConfirmed: (provider: string, minutesEarlier: number) => string;
+  reportAsk: string;
+  reportWhat: Record<"water" | "power" | "gas", string>;
+  reportWhere: string;
+  reportOtherStreet: string;
+  reportPrompt: Record<"water" | "power" | "gas", string>;
+  reportPrivateOnly: string;
+  reportCounted: (count: number, need: number) => string;
+  reportSignal: (count: number) => string;
+  reportRepeat: string;
+  reportLimit: string;
+  reportOfficial: (provider: string) => string;
+  reportsToggle: string;
   warningLiftedReply: (icon: string, provider: string) => string;
   roadClosed: string;
   roadRestored: string;
@@ -110,6 +126,21 @@ const ru: Strings = {
   level: ["🟡 Опасность низкая", "🟠 Опасность средняя", "🔴 Опасность высокая"],
   warningLifted: (p) => `✅ <b>Отменено</b> — ${p} снял предупреждение`,
   warningLiftedReply: (icon, p) => `✅ ${icon} ${p} снял предупреждение.`,
+  reportsKind: (n, m) => `👥 Сообщают жители: ${n} ${ruPlural(n, "человек", "человека", "человек")} за ${m} мин`,
+  reportsUnconfirmed: "Официально пока не подтверждено",
+  reportsConfirmed: (p, m) => (m > 0 ? `✅ Подтвердил ${p} — жители заметили на ${m} мин раньше` : `✅ Подтвердил ${p}`),
+  reportAsk: "👥 Что случилось? Если у нескольких соседей то же самое, бот предупредит остальных.",
+  reportWhat: { water: "💧 Нет воды", power: "💡 Нет света", gas: "🔥 Нет газа" },
+  reportWhere: "Где? Выберите улицу или укажите другую:",
+  reportOtherStreet: "✏️ Другая улица",
+  reportPrompt: { water: "👥 💧 На какой улице нет воды?", power: "👥 💡 На какой улице нет света?", gas: "👥 🔥 На какой улице нет газа?" },
+  reportPrivateOnly: "Сообщить можно в личке с ботом.",
+  reportCounted: (c, n) => `Спасибо, учёл. На этой улице сообщили ${c} из ${n} — когда наберётся, предупрежу соседей.`,
+  reportSignal: (c) => `Спасибо! Сообщили уже ${c} — соседи предупреждены.`,
+  reportRepeat: "Вы уже сообщали об этом недавно — спасибо, учтено.",
+  reportLimit: "На сегодня сообщений достаточно — спасибо!",
+  reportOfficial: (p) => `Об этом уже известно официально (${p}) — смотрите /now.`,
+  reportsToggle: "👥 Сообщения жителей",
   roadClosed: "⛔ Движение ограничено",
   roadRestored: "✅ Движение восстановлено",
   finished: (p) => `✅ <b>Завершено</b> — ${p} убрал отключение из списка текущих`,
@@ -156,6 +187,7 @@ const ru: Strings = {
 /list — подписки и удаление
 /types — выбрать воду, свет, газ
 /now — что отключено прямо сейчас
+/report — сообщить, что у вас нет воды, света или газа: когда о том же сообщат несколько соседей, бот предупредит остальных
 /lang — язык
 
 <b>В группе</b> подписки меняют только админы, а приходят сообщения всем.
@@ -202,6 +234,21 @@ const en: Strings = {
   level: ["🟡 Low danger", "🟠 Medium danger", "🔴 High danger"],
   warningLifted: (p) => `✅ <b>Lifted</b> — ${p} has withdrawn the warning`,
   warningLiftedReply: (icon, p) => `✅ ${icon} ${p} has withdrawn the warning.`,
+  reportsKind: (n, m) => `👥 Residents report: ${n} ${n === 1 ? "person" : "people"} in ${m} min`,
+  reportsUnconfirmed: "Not confirmed officially yet",
+  reportsConfirmed: (p, m) => (m > 0 ? `✅ Confirmed by ${p} — residents noticed ${m} min earlier` : `✅ Confirmed by ${p}`),
+  reportAsk: "👥 What's wrong? If several neighbours say the same, the bot warns the rest.",
+  reportWhat: { water: "💧 No water", power: "💡 No power", gas: "🔥 No gas" },
+  reportWhere: "Where? Pick a street or name another:",
+  reportOtherStreet: "✏️ Another street",
+  reportPrompt: { water: "👥 💧 Which street has no water?", power: "👥 💡 Which street has no power?", gas: "👥 🔥 Which street has no gas?" },
+  reportPrivateOnly: "Reports go through a private chat with the bot.",
+  reportCounted: (c, n) => `Thanks, noted. ${c} of ${n} reports on this street — once there are enough, I'll warn the neighbours.`,
+  reportSignal: (c) => `Thanks! ${c} reports now — the neighbours have been warned.`,
+  reportRepeat: "You reported this a moment ago — thanks, it's counted.",
+  reportLimit: "That's plenty of reports for today — thank you!",
+  reportOfficial: (p) => `This is already known officially (${p}) — see /now.`,
+  reportsToggle: "👥 Residents' reports",
   roadClosed: "⛔ Traffic restricted",
   roadRestored: "✅ Traffic restored",
   finished: (p) => `✅ <b>Over</b> — ${p} has taken it off its list of current outages`,
@@ -248,6 +295,7 @@ const en: Strings = {
 /list — your subscriptions, and removing them
 /types — water, power, gas
 /now — what is off right now
+/report — say you have no water, power or gas: when several neighbours say the same, the bot warns the rest
 /lang — language
 
 <b>In a group</b> only admins change the subscriptions; everyone gets the messages.
@@ -295,6 +343,21 @@ const ka: Strings = {
   level: ["🟡 საფრთხის დონე დაბალი", "🟠 საფრთხის დონე საშუალო", "🔴 საფრთხის დონე მაღალი"],
   warningLifted: (p) => `✅ <b>გაუქმდა</b> — ${p}-მ გაფრთხილება მოხსნა`,
   warningLiftedReply: (icon, p) => `✅ ${icon} ${p}-მ გაფრთხილება მოხსნა.`,
+  reportsKind: (n, m) => `👥 მაცხოვრებლები გვატყობინებენ: ${n} ადამიანი ${m} წუთში`,
+  reportsUnconfirmed: "ოფიციალურად ჯერ არ დადასტურებულა",
+  reportsConfirmed: (p, m) => (m > 0 ? `✅ დაადასტურა ${p}-მ — მაცხოვრებლებმა ${m} წუთით ადრე შეამჩნიეს` : `✅ დაადასტურა ${p}-მ`),
+  reportAsk: "👥 რა მოხდა? თუ რამდენიმე მეზობელი იგივეს იტყვის, ბოტი დანარჩენებს გააფრთხილებს.",
+  reportWhat: { water: "💧 წყალი არ არის", power: "💡 შუქი არ არის", gas: "🔥 გაზი არ არის" },
+  reportWhere: "სად? აირჩიეთ ქუჩა ან მიუთითეთ სხვა:",
+  reportOtherStreet: "✏️ სხვა ქუჩა",
+  reportPrompt: { water: "👥 💧 რომელ ქუჩაზე არ არის წყალი?", power: "👥 💡 რომელ ქუჩაზე არ არის შუქი?", gas: "👥 🔥 რომელ ქუჩაზე არ არის გაზი?" },
+  reportPrivateOnly: "შეტყობინება ბოტთან პირად ჩატში შეგიძლიათ.",
+  reportCounted: (c, n) => `გმადლობთ, აღვრიცხე. ამ ქუჩაზე ${n}-დან ${c} შეტყობინებაა — როცა საკმარისი იქნება, მეზობლებს გავაფრთხილებ.`,
+  reportSignal: (c) => `გმადლობთ! უკვე ${c} შეტყობინებაა — მეზობლები გაფრთხილებულნი არიან.`,
+  reportRepeat: "ამის შესახებ ახლახან უკვე შეგვატყობინეთ — გმადლობთ, აღრიცხულია.",
+  reportLimit: "დღეისთვის საკმარისი შეტყობინებაა — გმადლობთ!",
+  reportOfficial: (p) => `ეს უკვე ოფიციალურადაა ცნობილი (${p}) — იხილეთ /now.`,
+  reportsToggle: "👥 მაცხოვრებლების შეტყობინებები",
   roadClosed: "⛔ მოძრაობა შეზღუდულია",
   roadRestored: "✅ მოძრაობა აღდგა",
   finished: (p) => `✅ <b>დასრულდა</b> — ${p}-მ გათიშვა მიმდინარეების სიიდან ამოიღო`,
@@ -341,6 +404,7 @@ const ka: Strings = {
 /list — გამოწერები და მათი წაშლა
 /types — წყალი, შუქი, გაზი
 /now — რა არის გათიშული ახლა
+/report — შეგვატყობინეთ, რომ წყალი, შუქი ან გაზი არ გაქვთ: როცა რამდენიმე მეზობელი იგივეს იტყვის, ბოტი დანარჩენებს გააფრთხილებს
 /lang — ენა
 
 <b>ჯგუფში</b> გამოწერებს მხოლოდ ადმინები ცვლიან, შეტყობინებები კი ყველას მოდის.

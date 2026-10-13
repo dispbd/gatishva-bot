@@ -45,6 +45,8 @@ export interface Outage {
   over?: boolean;
   /** A weather warning's danger level, 1 (yellow) to 3 (red). */
   level?: 1 | 2 | 3;
+  /** Set on a residents' signal: how many reported, since when, and who confirmed it. */
+  reports?: { count: number; since: number; confirmedBy?: string; confirmedAt?: number };
   emergency: boolean;
   /** Epoch seconds. Absent when the provider does not say. */
   start?: number;

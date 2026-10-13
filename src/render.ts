@@ -98,6 +98,8 @@ export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): s
   }
   head.push(`${UTILITY_ICON[o.utility]} <b>${S.utility[o.utility]} · ${escapeHtml(place)}</b>`);
 
+  if (o.reports) return renderSignal(o, streetSubs, head, lang);
+
   const reason = reasonOf(o, lang);
   const kind =
     o.utility === "road"
@@ -151,6 +153,22 @@ export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): s
   }
 
   return [head.join("\n"), ...blocks, foot].join("\n");
+}
+
+/**
+ * A residents' signal: who says what, since when, and whether a provider has
+ * confirmed it. No provider text to quote and no link to follow, so no
+ * quotes and no footer.
+ */
+function renderSignal(o: Outage, streetSubs: Sub[], head: string[], lang: Lang): string {
+  const S = t(lang);
+  const r = o.reports!;
+  const minutes = Math.max(1, Math.round(((r.confirmedAt ?? Date.now() / 1000) - r.since) / 60));
+  head.push(S.reportsKind(r.count, Math.max(1, Math.round((Date.now() / 1000 - r.since) / 60))));
+  head.push(r.confirmedBy ? S.reportsConfirmed(escapeHtml(r.confirmedBy), minutes) : S.reportsUnconfirmed);
+  const labels = streetSubs.length ? streetSubs.map((s) => s.label) : o.addresses.map((a) => addressLocal(a, lang));
+  head.push(`📍 ${labels.map((l) => `<b>${escapeHtml(l)}</b>`).join(", ")}`);
+  return head.join("\n");
 }
 
 function timeLine(o: Outage, lang: Lang): string {
