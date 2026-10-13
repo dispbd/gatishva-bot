@@ -11,6 +11,7 @@
 // The skeleton also drops spaces and punctuation, which is not just tidiness:
 // Telasi's texts are full of words broken by stray spaces ("მას ივის",
 // "ბუაჩი ძის"), and a match must survive them.
+import type { Lang } from "./i18n.ts";
 
 const KA_TO_SKEL: Record<string, string> = {
   "ა": "a", "ბ": "b", "გ": "g", "დ": "d", "ე": "e", "ვ": "v", "ზ": "z", "თ": "t",
@@ -193,7 +194,7 @@ export function mergeSpans(spans: Span[]): Span[] {
 }
 
 // ---------------------------------------------------------------------------
-// Georgian → Russian, for display.
+// Georgian → Russian and English, for display.
 //
 // Machine translation mangles street names, and the people reading these are
 // looking for *their* street, which they know by its Russian or Latin spelling.
@@ -211,6 +212,38 @@ const KA_VOWELS = "აეიოუ";
 
 export function hasGeorgian(text: string): boolean {
   return /[ა-ჿ]/.test(text);
+}
+
+/**
+ * Georgian's national romanisation without the apostrophes that mark
+ * ejectives — the spelling on Tbilisi's own street signs: Chavchavadze,
+ * Tsereteli, Agmashenebeli.
+ */
+const KA_TO_EN: Record<string, string> = {
+  "ა": "a", "ბ": "b", "გ": "g", "დ": "d", "ე": "e", "ვ": "v", "ზ": "z", "თ": "t",
+  "ი": "i", "კ": "k", "ლ": "l", "მ": "m", "ნ": "n", "ო": "o", "პ": "p", "ჟ": "zh",
+  "რ": "r", "ს": "s", "ტ": "t", "უ": "u", "ფ": "p", "ქ": "k", "ღ": "gh", "ყ": "q",
+  "შ": "sh", "ჩ": "ch", "ც": "ts", "ძ": "dz", "წ": "ts", "ჭ": "ch", "ხ": "kh", "ჯ": "j",
+  "ჰ": "h",
+};
+
+function capitalise(text: string): string {
+  // Georgian has no capitals; Latin and Cyrillic names need them.
+  return text.replace(/(^|[^\p{L}])(\p{Ll})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
+}
+
+/** Letter-by-letter Georgian → Latin. */
+export function translitEn(text: string): string {
+  let out = "";
+  for (const ch of text) out += KA_TO_EN[ch] ?? ch;
+  return capitalise(out);
+}
+
+/** A Georgian name as a reader of `lang` writes it; Georgian readers get it as is. */
+export function translit(text: string, lang: Lang): string {
+  if (lang === "ru") return translitRu(text);
+  if (lang === "en") return translitEn(text);
+  return text;
 }
 
 /** Letter-by-letter Georgian → Cyrillic, with the few rules Russian spelling expects. */
@@ -233,8 +266,7 @@ export function translitRu(text: string): string {
       out += KA_TO_RU[ch] ?? ch;
     }
   }
-  // Georgian has no capitals; Russian names need them.
-  return out.replace(/(^|[^\p{L}])(\p{Ll})/gu, (_, sep: string, c: string) => sep + c.toUpperCase());
+  return capitalise(out);
 }
 
 /**
@@ -270,40 +302,41 @@ export function toNominative(word: string): string {
 
 /**
  * Street-type words, matched by skeleton prefix (so every case form is caught),
- * with how they read in Russian. `lead` ones move to the front, Russian style:
- * "ул. Чавчавадзе", not "Чавчавадзе ул.".
+ * with how they read in Russian and English. Georgian puts the type after the
+ * name, as English does — "Chavchavadze St." — while Russian moves some to the
+ * front: `lead` gives "ул. Чавчавадзе", `enLead` gives "Village Nukriani".
  */
-const TYPE_WORDS: { prefix: string; ru: string; lead?: boolean; exact?: boolean }[] = [
-  { prefix: "k", ru: "ул.", lead: true, exact: true }, // "ქ."
-  { prefix: "kuch", ru: "ул.", lead: true },
-  { prefix: "gamz", ru: "пр.", lead: true },
-  { prefix: "shesahvev", ru: "пер." },
-  { prefix: "chih", ru: "туп." },
-  { prefix: "kvartl", ru: "кв." },
-  { prefix: "kvartal", ru: "кв." },
-  { prefix: "kv", ru: "кв.", exact: true },
-  { prefix: "mikroraion", ru: "мкр" },
-  { prefix: "mkr", ru: "мкр", exact: true },
-  { prefix: "mr", ru: "мкр", exact: true },
-  { prefix: "dasahleb", ru: "пос." },
-  { prefix: "sopel", ru: "с.", lead: true },
-  { prefix: "sop", ru: "с.", lead: true, exact: true },
-  { prefix: "s", ru: "с.", lead: true, exact: true }, // "ს." — also "village"
-  { prefix: "heivan", ru: "аллея" },
-  { prefix: "heivn", ru: "аллея" }, // ხეივნის, without its vowel
-  { prefix: "agmart", ru: "подъём" },
-  { prefix: "dagmart", ru: "спуск" },
-  { prefix: "moedan", ru: "пл.", lead: true },
-  { prefix: "moedn", ru: "пл.", lead: true },
-  { prefix: "gzatkecil", ru: "шоссе" },
-  { prefix: "gasasvlel", ru: "проезд" },
-  { prefix: "masiv", ru: "массив" },
-  { prefix: "raion", ru: "р-н" },
-  { prefix: "kentebs", ru: "(нечёт.)" },
-  { prefix: "lucebs", ru: "(чёт.)" },
-  { prefix: "teritori", ru: "терр." },
-  { prefix: "mimdebare", ru: "окрестности" },
-  { prefix: "da", ru: "и", exact: true },
+const TYPE_WORDS: { prefix: string; ru: string; en: string; lead?: boolean; enLead?: boolean; exact?: boolean }[] = [
+  { prefix: "k", ru: "ул.", en: "St.", lead: true, exact: true }, // "ქ."
+  { prefix: "kuch", ru: "ул.", en: "St.", lead: true },
+  { prefix: "gamz", ru: "пр.", en: "Ave.", lead: true },
+  { prefix: "shesahvev", ru: "пер.", en: "Lane" },
+  { prefix: "chih", ru: "туп.", en: "Dead End" },
+  { prefix: "kvartl", ru: "кв.", en: "Block" },
+  { prefix: "kvartal", ru: "кв.", en: "Block" },
+  { prefix: "kv", ru: "кв.", en: "Block", exact: true },
+  { prefix: "mikroraion", ru: "мкр", en: "Microdistrict" },
+  { prefix: "mkr", ru: "мкр", en: "Microdistrict", exact: true },
+  { prefix: "mr", ru: "мкр", en: "Microdistrict", exact: true },
+  { prefix: "dasahleb", ru: "пос.", en: "Settlement" },
+  { prefix: "sopel", ru: "с.", en: "Village", lead: true, enLead: true },
+  { prefix: "sop", ru: "с.", en: "Village", lead: true, enLead: true, exact: true },
+  { prefix: "s", ru: "с.", en: "Village", lead: true, enLead: true, exact: true }, // "ს." — also "village"
+  { prefix: "heivan", ru: "аллея", en: "Alley" },
+  { prefix: "heivn", ru: "аллея", en: "Alley" }, // ხეივნის, without its vowel
+  { prefix: "agmart", ru: "подъём", en: "Rise" },
+  { prefix: "dagmart", ru: "спуск", en: "Descent" },
+  { prefix: "moedan", ru: "пл.", en: "Sq.", lead: true },
+  { prefix: "moedn", ru: "пл.", en: "Sq.", lead: true },
+  { prefix: "gzatkecil", ru: "шоссе", en: "Hwy" },
+  { prefix: "gasasvlel", ru: "проезд", en: "Passage" },
+  { prefix: "masiv", ru: "массив", en: "Massif" },
+  { prefix: "raion", ru: "р-н", en: "District" },
+  { prefix: "kentebs", ru: "(нечёт.)", en: "(odd)" },
+  { prefix: "lucebs", ru: "(чёт.)", en: "(even)" },
+  { prefix: "teritori", ru: "терр.", en: "area" },
+  { prefix: "mimdebare", ru: "окрестности", en: "vicinity" },
+  { prefix: "da", ru: "и", en: "and", exact: true },
 ];
 
 function typeWord(word: string): (typeof TYPE_WORDS)[number] | undefined {
@@ -312,12 +345,18 @@ function typeWord(word: string): (typeof TYPE_WORDS)[number] | undefined {
   return TYPE_WORDS.find((t) => (t.exact ? k === t.prefix : k.startsWith(t.prefix)));
 }
 
-/**
- * One address as a Russian reader would write it: "ალექსანდრე ჭავჭავაძის ქ. N 4"
- * becomes "ул. Александре Чавчавадзе № 4". Text that is not Georgian is left alone.
- */
+/** One address as a Russian reader would write it; see addressLocal. */
 export function addressRu(item: string): string {
-  if (!hasGeorgian(item)) return item.trim();
+  return addressLocal(item, "ru");
+}
+
+/**
+ * One address as a reader of `lang` would write it: "ალექსანდრე ჭავჭავაძის ქ. N 4"
+ * becomes "ул. Александре Чавчавадзе № 4" or "Aleksandre Chavchavadze St. No. 4".
+ * Georgian readers, and text that is not Georgian, get it as written.
+ */
+export function addressLocal(item: string, lang: Lang): string {
+  if (lang === "ka" || !hasGeorgian(item)) return item.trim();
   // "N31-39(კენტებს)": the parenthesis is its own word, "odd numbers".
   // A Roman numeral glued to its word ("Iშესახვევის") is two words.
   const tokens = item
@@ -340,16 +379,19 @@ export function addressRu(item: string): string {
   }
   if (nameEnd === -1) nameEnd = tokens.length - 1;
 
+  const no = lang === "en" ? "No." : "№";
   tokens.forEach((tok, i) => {
     const t = typeWord(tok);
     if (t) {
-      if (t.lead && !lead.includes(t.ru)) lead.push(t.ru);
-      else if (!t.lead) body.push(t.ru);
+      const label = lang === "en" ? t.en : t.ru;
+      const leads = lang === "en" ? t.enLead : t.lead;
+      if (leads && !lead.includes(label)) lead.push(label);
+      else if (!leads) body.push(label);
       return;
     }
-    if (tok === "N" || tok === "№") return body.push("№");
+    if (tok === "N" || tok === "№") return body.push(no);
     const word = i === nameEnd ? toNominative(tok) : tok;
-    body.push(translitRu(word.replace(/^N(?=\d)/, "№ ")));
+    body.push(translit(word.replace(/^N(?=\d)/, `${no} `), lang));
   });
   return [...lead, ...body].join(" ").replace(/\s+/g, " ").trim();
 }

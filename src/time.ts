@@ -1,6 +1,9 @@
 // Every provider publishes in Tbilisi time and so do we. Georgia has had no DST
 // since 2005, so +04:00 is a constant — which is what lets the parsers build
 // dates without a timezone library.
+import { t } from "./i18n.ts";
+import type { Lang } from "./i18n.ts";
+
 const TZ = "Asia/Tbilisi";
 export const TBILISI_OFFSET_SEC = 4 * 3600;
 
@@ -57,13 +60,13 @@ export function fmtTime(epochSec: number): string {
  * A time window as briefly as it reads unambiguously: the date is said once
  * when both ends fall on the same day.
  */
-export function fmtRange(start: number | undefined, end: number | undefined): string {
+export function fmtRange(start: number | undefined, end: number | undefined, lang: Lang = "ru"): string {
   if (start && end) {
     const sameDay = fmtDateTime(start).slice(0, 5) === fmtDateTime(end).slice(0, 5);
     return `${fmtDateTime(start)} – ${sameDay ? fmtTime(end) : fmtDateTime(end)}`;
   }
-  if (start) return `с ${fmtDateTime(start)}`;
-  if (end) return `до ${fmtDateTime(end)}`;
+  if (start) return t(lang).from(fmtDateTime(start));
+  if (end) return t(lang).until(fmtDateTime(end));
   return "";
 }
 

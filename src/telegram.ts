@@ -6,6 +6,8 @@ export interface TgUser {
   first_name?: string;
   last_name?: string;
   username?: string;
+  /** The user's Telegram language, "ru" or "en-GB"; seeds a new chat's language. */
+  language_code?: string;
 }
 
 export interface TgChat {

@@ -17,13 +17,14 @@ import { matchOutage, streetSub, citySub, learnedDistrict, DEFAULT_CITY } from "
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
 import { fingerprint, isCurrent, sha256, median, MISSES_TO_FINISH } from "./diff.ts";
-import { findKeys, addressRu } from "./georgian.ts";
-import { cityRu } from "./cities.ts";
+import { findKeys, translit } from "./georgian.ts";
 import { tg, describe, isChatGone, isNotModified, TelegramError, escapeHtml } from "./telegram.ts";
 import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts";
 import { UTILITIES } from "./types.ts";
 import type { Outage, Utility, SourceDef, GwpPath } from "./types.ts";
 import type { RelayResult } from "./gwp-relay-do.ts";
+import { t, isLang } from "./i18n.ts";
+import type { Lang } from "./i18n.ts";
 
 /** Telegram calls per alarm run: the free plan allows 50 subrequests, polls take the rest. */
 const SENDS_PER_RUN = 30;
@@ -71,12 +72,14 @@ export interface ChatInfo {
 
 export interface AddResult {
   ok: boolean;
-  /** Why not, in Russian, when !ok. */
-  error?: string;
+  /** Why not, when !ok; the bot words it in the chat's language. */
+  error?: "too_short" | "too_many";
+  /** The subscription count, for "too_many". */
+  count?: number;
   sub?: Sub;
   /** Current outages matching it, queued to be sent right away. */
   current: number;
-  /** A few recent addresses it matched, in Russian, as proof it will work. */
+  /** A few recent addresses it matched, as published (Georgian), as proof it will work. */
   examples: string[];
   /** The districts this street is known to be in, Georgian; empty when unknown. */
   districts: string[];
@@ -119,6 +122,10 @@ export class Hub extends DurableObject<Env> {
     // Added after launch. `first_read` marks what a source already held when the
     // bot first read it: an archive, "seen" only because the bot was switched on,
     // which has no place in a statistic of how late news arrives.
+    // Added later still: the chat's language. NULL for chats from before it,
+    // which were all Russian-speaking, and the readers treat NULL as Russian.
+    const chatColumns = this.rows<{ name: string }>(`PRAGMA table_info(chats)`).map((c) => c.name);
+    if (!chatColumns.includes("lang")) this.sql.exec(`ALTER TABLE chats ADD COLUMN lang TEXT`);
     const columns = this.rows<{ name: string }>(`PRAGMA table_info(events)`).map((c) => c.name);
     if (!columns.includes("first_read")) {
       this.sql.exec(`ALTER TABLE events ADD COLUMN first_read INTEGER NOT NULL DEFAULT 0`);
@@ -424,7 +431,8 @@ export class Hub extends DurableObject<Env> {
     const mine = matchOutage(o, subs, () => UTILITIES).get(chatId) ?? [];
     // Unsubscribed since it was queued: a new message would be a surprise.
     if (mine.length === 0 && (op === "new" || op === "repeat")) return;
-    const text = renderOutage(o, mine, { finished: ev.finished_at !== null });
+    const lang = this.langOf(chatId);
+    const text = renderOutage(o, mine, { finished: ev.finished_at !== null, lang });
     const sent = this.rows<{ message_id: number }>(
       `SELECT message_id FROM sent WHERE key = ? AND chat_id = ?`, key, chatId,
     )[0];
@@ -459,7 +467,7 @@ export class Hub extends DurableObject<Env> {
     if (op === "finished") {
       await tg(this.env, "sendMessage", {
         chat_id: chatId,
-        text: `✅ ${UTILITY_ICON[o.utility]} По данным ${escapeHtml(o.provider)}, отключение завершено.`,
+        text: t(lang).finishedReply(UTILITY_ICON[o.utility], escapeHtml(o.provider)),
         parse_mode: "HTML",
         disable_notification: true,
         reply_parameters: { message_id: sent.message_id, allow_sending_without_reply: true },
@@ -550,6 +558,31 @@ export class Hub extends DurableObject<Env> {
     );
   }
 
+  /**
+   * The chat's language. A chat seen for the first time takes `hint` — its
+   * first user's Telegram language — and keeps it until /lang says otherwise.
+   */
+  chatLang(chat: ChatInfo, hint: Lang): Lang {
+    this.sql.exec(
+      `INSERT INTO chats (id, type, title, created, lang) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET type = excluded.type, title = excluded.title`,
+      chat.id, chat.type, chat.title ?? null, nowSec(), hint,
+    );
+    return this.langOf(chat.id);
+  }
+
+  setLang(chatId: number, lang: Lang): void {
+    this.sql.exec(
+      `INSERT INTO chats (id, created, lang) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET lang = excluded.lang`,
+      chatId, nowSec(), lang,
+    );
+  }
+
+  private langOf(chatId: number): Lang {
+    const lang = this.rows<{ lang: string | null }>(`SELECT lang FROM chats WHERE id = ?`, chatId)[0]?.lang;
+    return isLang(lang) ? lang : "ru";
+  }
+
   utilities(chatId: number): Utility[] {
     return this.utilitiesLookup()(chatId);
   }
@@ -576,10 +609,10 @@ export class Hub extends DurableObject<Env> {
   async addStreet(chat: ChatInfo, label: string, city = DEFAULT_CITY, district?: string): Promise<AddResult> {
     const sub = streetSub(label, city);
     if (sub.keys.length === 0) {
-      return { ok: false, error: "Слишком коротко — напишите название улицы хотя бы из 4 букв.", current: 0, examples: [], districts: [] };
+      return { ok: false, error: "too_short", current: 0, examples: [], districts: [] };
     }
     // Outside Tbilisi the city is part of what the subscriber reads back in /list.
-    if (city !== DEFAULT_CITY) sub.label = `${cityRu(city)}, ${sub.label}`;
+    if (city !== DEFAULT_CITY) sub.label = `${translit(city, this.langOf(chat.id))}, ${sub.label}`;
     return this.add(chat, sub, district);
   }
 
@@ -591,7 +624,7 @@ export class Hub extends DurableObject<Env> {
     this.touchChat(chat);
     const count = this.rows<{ n: number }>(`SELECT COUNT(*) AS n FROM subs WHERE chat_id = ?`, chat.id)[0]?.n ?? 0;
     if (count >= MAX_SUBS_PER_CHAT) {
-      return { ok: false, error: `Уже ${count} подписок — это предел. Удалите лишние в /list.`, current: 0, examples: [], districts: [] };
+      return { ok: false, error: "too_many", count, current: 0, examples: [], districts: [] };
     }
     this.sql.exec(
       `INSERT OR IGNORE INTO subs (chat_id, kind, city, label, keys, created) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -625,7 +658,7 @@ export class Hub extends DurableObject<Env> {
       if (!matchOutage(o, [sub], () => UTILITIES).size) continue;
       if (sub.kind === "street" && examples.size < 3) {
         const hit = o.addresses.find((a) => findKeys(a, sub.keys).length);
-        if (hit) examples.add(addressRu(hit));
+        if (hit) examples.add(hit);
       }
       const source = sourceByName(ev.source);
       if (

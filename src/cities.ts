@@ -1,6 +1,6 @@
 // Cities a subscriber may name, and how to tell a city from a street in
 // "/add Батуми, Руставели".
-import { skel, translitRu } from "./georgian.ts";
+import { skel } from "./georgian.ts";
 
 /**
  * The places outages are published for, as the providers write them. Regional
@@ -15,11 +15,6 @@ export const KNOWN_CITIES = [
   "ტყიბული", "ბაკურიანი", "ახალქალაქი", "ნინოწმინდა", "წალკა", "თეთრიწყარო",
   "ბოლნისი", "დმანისი", "ხობი", "მესტია", "ამბროლაური", "ონი", "ლანჩხუთი", "ხონი",
 ];
-
-/** Russian name for a Georgian city name. */
-export function cityRu(city: string): string {
-  return translitRu(city);
-}
 
 /** The known city a typed name refers to, by skeleton, or undefined. */
 export function resolveCity(typed: string, known: string[]): string | undefined {

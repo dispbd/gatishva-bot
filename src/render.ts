@@ -1,10 +1,14 @@
-// An outage as a Telegram message (parse_mode HTML).
+// An outage as a Telegram message (parse_mode HTML), in the chat's language.
 //
 // The reader's question is "is it my street, and when?", so that is what the
-// top three lines answer, in Russian, from the parsed fields. Everything else —
-// the full address list and the provider's own Georgian text — sits in
-// collapsed quotes underneath, with the reader's streets in bold in both.
-import { addressRu, translitRu, findKeys } from "./georgian.ts";
+// top three lines answer, in the reader's language, from the parsed fields.
+// Everything else — the full address list and the provider's own Georgian
+// text — sits in collapsed quotes underneath, with the reader's streets in bold
+// in both. A Georgian reader gets the original alone: the address list would
+// only repeat it.
+import { addressLocal, translit, findKeys } from "./georgian.ts";
+import { t } from "./i18n.ts";
+import type { Lang, Reason } from "./i18n.ts";
 import type { Span } from "./georgian.ts";
 import { highlightSpans } from "./match.ts";
 import { preamble } from "./sources/common.ts";
@@ -14,27 +18,27 @@ import { fmtDateTime, fmtRange, TBILISI_OFFSET_SEC } from "./time.ts";
 import type { Outage, Utility } from "./types.ts";
 
 export const UTILITY_ICON: Record<Utility, string> = { water: "💧", power: "💡", gas: "🔥" };
-export const UTILITY_NAME: Record<Utility, string> = { water: "Вода", power: "Свет", gas: "Газ" };
 
 /** Telegram's limit is 4096 characters of visible text; this leaves headroom. */
 const LIMIT = 4000;
 
 /** The cause, from the Georgian wording. First match wins, most specific first. */
-const REASONS: [RegExp, string][] = [
-  [/ხანძ/, "пожар"],
-  [/გადართვ/, "переключение в сети"],
-  [/კოროზი/, "коррозия трубы"],
-  [/დაზიან/, "повреждение сети"],
-  [/ავარი/, "авария"],
-  [/სარეკონსტრუქციო|რეკონსტრუქც|სარეაბილიტაციო|რეაბილიტაც/, "реконструкция"],
-  [/პროფილაქტ/, "профилактика"],
-  [/გადაუდებ/, "срочные работы"],
-  [/სამუშაო/, "работы"],
+const REASONS: [RegExp, Reason][] = [
+  [/ხანძ/, "fire"],
+  [/გადართვ/, "switching"],
+  [/კოროზი/, "corrosion"],
+  [/დაზიან/, "damage"],
+  [/ავარი/, "accident"],
+  [/სარეკონსტრუქციო|რეკონსტრუქც|სარეაბილიტაციო|რეაბილიტაც/, "reconstruction"],
+  [/პროფილაქტ/, "maintenance"],
+  [/გადაუდებ/, "urgent"],
+  [/სამუშაო/, "works"],
 ];
 
-export function reasonOf(o: Outage): string | undefined {
+export function reasonOf(o: Outage, lang: Lang = "ru"): string | undefined {
   const text = `${o.title ?? ""} ${preamble(o.text)}`;
-  return REASONS.find(([re]) => re.test(text))?.[1];
+  const reason = REASONS.find(([re]) => re.test(text))?.[1];
+  return reason && t(lang).reason[reason];
 }
 
 /** Text with the spans in bold, everything escaped. */
@@ -56,87 +60,95 @@ export function visibleLength(html: string): number {
 export interface RenderState {
   /** The provider has taken the outage off its list of current ones. */
   finished?: boolean;
+  /** The chat's language; Russian when not given. */
+  lang?: Lang;
 }
 
 export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): string {
+  const lang = state.lang ?? "ru";
+  const S = t(lang);
   const streetSubs = subs.filter((s) => s.kind === "street");
   const districts = o.districts ?? (o.district ? [o.district] : []);
-  const place = [translitRu(o.city), districts.map(translitRu).join(" и ")].filter(Boolean).join(", ");
+  const place = [translit(o.city, lang), districts.map((d) => translit(d, lang)).join(S.and)]
+    .filter(Boolean)
+    .join(", ");
 
   const head: string[] = [];
-  if (state.finished) head.push(`✅ <b>Завершено</b> — ${escapeHtml(o.provider)} убрал отключение из списка текущих`);
-  head.push(`${UTILITY_ICON[o.utility]} <b>${UTILITY_NAME[o.utility]} · ${escapeHtml(place)}</b>`);
+  if (state.finished) head.push(S.finished(escapeHtml(o.provider)));
+  head.push(`${UTILITY_ICON[o.utility]} <b>${S.utility[o.utility]} · ${escapeHtml(place)}</b>`);
 
-  const reason = reasonOf(o);
-  const kind = o.emergency ? "⚠️ Аварийное" : "🛠 Плановое";
+  const reason = reasonOf(o, lang);
+  const kind = o.emergency ? S.emergency : S.planned;
   head.push(reason ? `${kind} · ${reason}` : kind);
 
-  const when = timeLine(o);
+  const when = timeLine(o, lang);
   if (when) head.push(when);
 
-  // The reader's own streets, in Russian, bold — the line they read first.
+  // The reader's own streets, in their language, bold — the line read first.
   const mine = o.addresses.filter((a) => findKeys(a, streetSubs.flatMap((s) => s.keys)).length > 0);
   if (streetSubs.length) {
     if (mine.length) {
-      head.push(`📍 ${mine.map((a) => `<b>${escapeHtml(addressRu(a))}</b>`).join(", ")}`);
+      head.push(`📍 ${mine.map((a) => `<b>${escapeHtml(addressLocal(a, lang))}</b>`).join(", ")}`);
     } else if (o.wholeDistricts) {
       // Matched by district, not by name: say so, or the reader looks for
       // their street in a notice that has none.
       const labels = streetSubs.map((s) => `<b>${escapeHtml(s.label)}</b>`).join(", ");
-      head.push(`📍 Отключение на весь район, в том числе ${labels}`);
+      head.push(S.wholeDistrict(labels));
     } else {
       head.push(`📍 ${streetSubs.map((s) => `<b>${escapeHtml(s.label)}</b>`).join(", ")}`);
     }
   }
 
-  const foot = footer(o);
+  const foot = footer(o, lang);
 
   // The two collapsed quotes share whatever room is left, addresses first.
   let room = LIMIT - visibleLength(head.join("\n")) - visibleLength(foot) - 40;
   const blocks: string[] = [];
 
-  if (o.addresses.length > 1 || (o.addresses.length === 1 && !mine.length)) {
+  // In Georgian the list would be the original's own words, so it is skipped:
+  // the original is the translation.
+  const original = lang === "ka";
+  if (!original && (o.addresses.length > 1 || (o.addresses.length === 1 && !mine.length))) {
     const items = o.addresses.map((a) => {
-      const ru = escapeHtml(addressRu(a));
-      return mine.includes(a) ? `<b>${ru}</b>` : ru;
+      const local = escapeHtml(addressLocal(a, lang));
+      return mine.includes(a) ? `<b>${local}</b>` : local;
     });
-    const list = fitList(items, room - 30);
-    blocks.push(`<blockquote expandable>📋 Адреса (${o.addresses.length}):\n${list}</blockquote>`);
+    const list = fitList(items, room - 30, lang);
+    blocks.push(`<blockquote expandable>${S.addresses(o.addresses.length)}\n${list}</blockquote>`);
     room -= visibleLength(list) + 30;
   }
 
   if (room > 200) {
     const spans = highlightSpans(o.text, streetSubs);
     const text = o.text.length > room ? truncateAround(o.text, spans, room) : { text: o.text, spans };
-    blocks.push(`<blockquote expandable>🇬🇪 ${boldSpans(text.text, text.spans)}</blockquote>`);
+    blocks.push(`<blockquote expandable>${original ? "" : "🇬🇪 "}${boldSpans(text.text, text.spans)}</blockquote>`);
   }
 
   return [head.join("\n"), ...blocks, foot].join("\n");
 }
 
-function timeLine(o: Outage): string {
-  if (o.start && o.end && o.end > o.start) return `🕒 ${fmtRange(o.start, o.end)}`;
-  if (o.start && !o.end) return `🕒 ${fmtRange(o.start, undefined)}`;
+function timeLine(o: Outage, lang: Lang): string {
+  const S = t(lang);
+  if (o.start && o.end && o.end > o.start) return `🕒 ${fmtRange(o.start, o.end, lang)}`;
+  if (o.start && !o.end) return `🕒 ${fmtRange(o.start, undefined, lang)}`;
   if (o.end) {
     // Telasi often publishes after its own estimate has passed. Say so plainly
     // rather than promising a time that is already behind us.
-    if (o.publishedAt && o.end < o.publishedAt) {
-      return `⏱ Восстановление ожидалось к ${fmtDateTime(o.end)} — раньше, чем вышло сообщение`;
-    }
-    return o.emergency ? `⏱ Восстановление ≈ ${fmtDateTime(o.end)}` : `🕒 ${fmtRange(undefined, o.end)}`;
+    if (o.publishedAt && o.end < o.publishedAt) return S.restoreStale(fmtDateTime(o.end));
+    return o.emergency ? S.restoreAbout(fmtDateTime(o.end)) : `🕒 ${fmtRange(undefined, o.end, lang)}`;
   }
   return "";
 }
 
-function footer(o: Outage): string {
+function footer(o: Outage, lang: Lang): string {
   const link = `<a href="${escapeHtml(o.url)}">${escapeHtml(o.provider)}</a>`;
   // A date-only publication time (te.ge gives no hour) would read as midnight.
   const precise = o.publishedAt && (o.publishedAt + TBILISI_OFFSET_SEC) % 86400 !== 0;
-  return precise ? `${link} · опубликовано ${fmtDateTime(o.publishedAt!)}` : link;
+  return precise ? `${link} · ${t(lang).published(fmtDateTime(o.publishedAt!))}` : link;
 }
 
-/** As many items as fit, then "и ещё N". Bold (the reader's) items are kept first. */
-function fitList(items: string[], room: number): string {
+/** As many items as fit, then "and N more". Bold (the reader's) items are kept first. */
+function fitList(items: string[], room: number, lang: Lang): string {
   const all = items.join(", ");
   if (visibleLength(all) <= room) return all;
   const mine = items.filter((i) => i.startsWith("<b>"));
@@ -149,7 +161,7 @@ function fitList(items: string[], room: number): string {
     out.push(it);
     len += add;
   }
-  return `${out.join(", ")} … и ещё ${items.length - out.length}`;
+  return `${out.join(", ")} ${t(lang).andMore(items.length - out.length)}`;
 }
 
 /**

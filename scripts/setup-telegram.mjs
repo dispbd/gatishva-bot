@@ -65,6 +65,16 @@ async function api(method, payload) {
 
 const show = async () => console.log("webhook:", await api("getWebhookInfo"));
 
+async function registerCommands() {
+  // The default menu (Russian) plus one per language; Telegram shows each
+  // user the one for their app language.
+  await api("setMyCommands", { commands: BOT_COMMANDS.ru });
+  for (const [language_code, commands] of Object.entries(BOT_COMMANDS)) {
+    await api("setMyCommands", { commands, language_code });
+  }
+  console.log(`commands registered in ${Object.keys(BOT_COMMANDS).join(", ")}: ${BOT_COMMANDS.ru.map((c) => "/" + c.command).join(" ")}`);
+}
+
 if (arg("info")) {
   await show();
   process.exit(0);
@@ -78,8 +88,7 @@ if (arg("delete")) {
 }
 
 if (arg("commands")) {
-  await api("setMyCommands", { commands: BOT_COMMANDS });
-  console.log(`commands registered: ${BOT_COMMANDS.map((c) => "/" + c.command).join(" ")}`);
+  await registerCommands();
   process.exit(0);
 }
 
@@ -107,7 +116,6 @@ await api("setWebhook", {
 });
 console.log(`webhook set to ${url}`);
 
-await api("setMyCommands", { commands: BOT_COMMANDS });
-console.log(`commands registered: ${BOT_COMMANDS.map((c) => "/" + c.command).join(" ")}`);
+await registerCommands();
 
 await show();
