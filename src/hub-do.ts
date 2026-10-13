@@ -16,7 +16,7 @@ import { SOURCES, sourceByName } from "./sources/index.ts";
 import { matchOutage, streetSub, citySub, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
-import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH } from "./diff.ts";
+import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH, UNTIL_FINISHED } from "./diff.ts";
 import { findKeys, translit } from "./georgian.ts";
 import { tg, describe, isChatGone, isNotModified, TelegramError, escapeHtml } from "./telegram.ts";
 import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts";
@@ -372,9 +372,13 @@ export class Hub extends DurableObject<Env> {
       if (isCurrent(o, now, source.live(o.key))) queued += this.queueMatches(o, subs, utilitiesOf, "new");
     }
 
-    // Live items that vanished: the provider says it is over.
+    // Live items that vanished: the provider says it is over. Only an item
+    // from a live list can vanish, and those are exactly the rows current
+    // until finished — so the index hands them over, instead of every row a
+    // source has piled up in a month, read and skipped on each change.
     const open = this.rows<EventRow>(
-      `SELECT key, missing FROM events WHERE source = ? AND finished_at IS NULL`, source.name,
+      `SELECT key, missing FROM events WHERE current_until = ? AND source = ? AND finished_at IS NULL`,
+      UNTIL_FINISHED, source.name,
     );
     for (const ev of open) {
       if (seen.has(ev.key) || !source.live(ev.key)) continue;
