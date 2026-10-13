@@ -14,7 +14,7 @@ const NOW = tbilisiEpoch(2026, 10, 8, 3, 0);
 const ALL = () => ["water", "power", "gas"];
 const sub = (id, chatId, s) => ({ id, chatId, ...s });
 
-const gwp = parseGwp(fixture("gwp.json"), "gwp");
+const gwp = parseGwp(fixture("gwp.json"), "gwp", NOW);
 const telasi = parseTelasi(fixture("telasi.json"), NOW);
 const mtatsminda = gwp.find((o) => o.key === "gwp:GWP-REQ-1301661");
 

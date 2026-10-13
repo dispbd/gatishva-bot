@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseGwp, gwpTimes } from "../src/sources/gwp.ts";
+import { parseGwp, gwpTimes, gwpDate } from "../src/sources/gwp.ts";
 import { parseTelasi, telasiEta } from "../src/sources/telasi.ts";
 import { parseEnergo, parseSocar, parseUwsc, energoPlace } from "../src/sources/regions.ts";
 import { teLinks, parseTeArticle } from "../src/sources/te.ts";
@@ -12,7 +12,7 @@ const fixture = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta
 const NOW = tbilisiEpoch(2026, 10, 8, 3, 0);
 
 test("GWP: four current outages, Georgian month-first dates", () => {
-  const list = parseGwp(fixture("gwp.json"), "gwp");
+  const list = parseGwp(fixture("gwp.json"), "gwp", NOW);
   assert.equal(list.length, 4);
   const mtatsminda = list.find((o) => o.key === "gwp:GWP-REQ-1301661");
   assert.equal(mtatsminda.district, "მთაწმინდა");
@@ -23,9 +23,18 @@ test("GWP: four current outages, Georgian month-first dates", () => {
 });
 
 test("GWP: an outage with only an end time", () => {
-  const t = gwpTimes("დაზიანების გამო 10/8/2026 09:00 საათამდე წყალმომარაგება შეუწყდა");
+  const t = gwpTimes("დაზიანების გამო 10/8/2026 09:00 საათამდე წყალმომარაგება შეუწყდა", NOW);
   assert.equal(t.start, undefined);
   assert.equal(t.end, tbilisiEpoch(2026, 10, 8, 9, 0));
+});
+
+test("GWP: an ambiguous date is read the way that lands nearer to now", () => {
+  // Month first, as GWP usually writes: around 8 October, 10/7 is the 7th of October.
+  assert.equal(gwpDate(10, 7, 2026, 23, 15, NOW), tbilisiEpoch(2026, 10, 7, 23, 15));
+  // Day first, as a notice of 8 October did: 8/10 is not the 10th of August.
+  assert.equal(gwpDate(8, 10, 2026, 20, 0, NOW), tbilisiEpoch(2026, 10, 8, 20, 0));
+  // Only one reading is a date at all.
+  assert.equal(gwpDate(13, 10, 2026, 9, 0, NOW), tbilisiEpoch(2026, 10, 13, 9, 0));
 });
 
 test("Telasi: an emergency's estimate is read through the stray spaces", () => {
