@@ -260,7 +260,7 @@ export class Hub extends DurableObject<Env> {
     const names = [...Array(RELAY_CANDIDATES)].map((_, i) => `gwp-${stamp}-${i}`);
     const results = await Promise.all(
       names.map((n) =>
-        this.relay(n, "weur").fetchGwp(path).catch((e): RelayResult => ({ ok: false, colo: "?", error: describe(e) })),
+        this.relay(n, "weur").fetchGwp(path, true).catch((e): RelayResult => ({ ok: false, colo: "?", error: describe(e) })),
       ),
     );
     const seen = results.map((r) => r.colo).join(", ");
@@ -271,7 +271,7 @@ export class Hub extends DurableObject<Env> {
     }
     const name = names[i]!;
     this.setMeta("gwp_relay", name);
-    this.setMeta("gwp_relay_colo", results[i]!.colo);
+    this.setMeta("gwp_relay_colo", results[i]!.colo ?? "?");
     this.setMeta("gwp_relay_failures", "0");
     console.log(`[gwp] relay is now ${name} in ${results[i]!.colo} (candidates: ${seen})`);
     return { ...results[i]!, name };

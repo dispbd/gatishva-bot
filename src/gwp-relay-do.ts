@@ -18,8 +18,11 @@ import type { GwpPath } from "./types.ts";
 
 export interface RelayResult {
   ok: boolean;
-  /** The data centre this relay lives in: "MAD" when it works. */
-  colo: string;
+  /**
+   * The data centre this relay lives in: "MAD" when it works. Looked up
+   * only when asked for, or when the request failed — see fetchGwp.
+   */
+  colo?: string;
   body?: string;
   error?: string;
 }
@@ -28,9 +31,22 @@ export interface RelayResult {
 export class GwpRelay extends DurableObject<Env> {
   private colo?: string;
 
-  async fetchGwp(path: GwpPath): Promise<RelayResult> {
-    this.colo ??= await whereAmI();
-    const colo = this.colo;
+  /**
+   * `locate` asks where this relay lives, which only a hunt needs to know.
+   * Asking on every call cost a request to cloudflare.com each time the
+   * object woke up — about 2,000 a day, one per poll. A failure always says
+   * where it happened, since that is the first question about it.
+   */
+  async fetchGwp(path: GwpPath, locate = false): Promise<RelayResult> {
+    const result = await this.fetchOnce(path);
+    if (locate || !result.ok) {
+      this.colo ??= await whereAmI();
+      result.colo = this.colo;
+    }
+    return result;
+  }
+
+  private async fetchOnce(path: GwpPath): Promise<RelayResult> {
     try {
       // A deadline that is lifted on answer: see fetchWithin.
       return await fetchWithin(
@@ -38,10 +54,10 @@ export class GwpRelay extends DurableObject<Env> {
         { headers: { "User-Agent": BROWSER_UA, Accept: "application/json" } },
         8_000,
         async (r): Promise<RelayResult> =>
-          r.ok ? { ok: true, colo, body: await r.text() } : { ok: false, colo, error: `HTTP ${r.status}` },
+          r.ok ? { ok: true, body: await r.text() } : { ok: false, error: `HTTP ${r.status}` },
       );
     } catch (e) {
-      return { ok: false, colo: this.colo, error: describe(e) };
+      return { ok: false, error: describe(e) };
     }
   }
 }
