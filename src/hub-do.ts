@@ -13,7 +13,7 @@
 // The flow on every alarm:  poll due sources → diff → outbox → drain → re-arm.
 import { DurableObject } from "cloudflare:workers";
 import { SOURCES, sourceByName } from "./sources/index.ts";
-import { matchOutage, streetSub, citySub, learnedDistrict, DEFAULT_CITY } from "./match.ts";
+import { matchOutage, streetSub, citySub, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
 import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH } from "./diff.ts";
@@ -142,6 +142,7 @@ export class Hub extends DurableObject<Env> {
       }
     }
     this.sql.exec(`CREATE INDEX IF NOT EXISTS events_current ON events (current_until)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS events_city_current ON events (city, current_until)`);
     if (!columns.includes("first_read")) {
       this.sql.exec(`ALTER TABLE events ADD COLUMN first_read INTEGER NOT NULL DEFAULT 0`);
       // Rows from before the column existed: a first read stamps a whole batch
@@ -708,10 +709,20 @@ export class Hub extends DurableObject<Env> {
     if (subs.length === 0) return 0;
     const utilitiesOf = this.utilitiesLookup();
     let n = 0;
-    // Only what is current, by the index: a few dozen rows out of the
-    // thousands the archives accumulate over a month.
+    // Only what is current, by the index, and only in the chat's cities. The
+    // regions alone keep a couple of hundred planned works current days ahead;
+    // a chat that follows Tbilisi should not parse every one of them.
+    const wanted = new Set(subs.map((s) => s.city));
+    const cities = this.rows<{ city: string }>(
+      `SELECT DISTINCT city FROM events WHERE current_until > ? AND finished_at IS NULL`, now,
+    )
+      .map((r) => r.city)
+      .filter((c) => wanted.has(citySkel(c)));
+    if (cities.length === 0) return 0;
     const rows = this.rows<EventRow>(
-      `SELECT * FROM events WHERE current_until > ? AND finished_at IS NULL ORDER BY first_seen`, now,
+      `SELECT * FROM events WHERE current_until > ? AND finished_at IS NULL
+         AND city IN (${cities.map(() => "?").join(", ")}) ORDER BY first_seen`,
+      now, ...cities,
     );
     for (const ev of rows) {
       const o = JSON.parse(ev.data) as Outage;
