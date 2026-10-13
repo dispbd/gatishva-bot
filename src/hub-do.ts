@@ -953,6 +953,27 @@ export class Hub extends DurableObject<Env> {
     return n;
   }
 
+  /**
+   * What is off now on a street, for someone not subscribed to it: the
+   * Messenger bot's one question. Newest first, at most five.
+   */
+  currentFor(label: string, cityName: string): Outage[] {
+    const sub: Sub = { id: -1, chatId: -1, ...streetSub(label, cityName) };
+    if (sub.keys.length === 0) return [];
+    const now = nowSec();
+    const rows = this.rows<{ data: string }>(
+      `SELECT data FROM events WHERE current_until > ? AND finished_at IS NULL AND city = ? ORDER BY first_seen DESC`,
+      now, cityName,
+    );
+    const out: Outage[] = [];
+    for (const r of rows) {
+      const o = JSON.parse(r.data) as Outage;
+      if (matchOutage(o, [sub], () => UTILITIES).size) out.push(o);
+      if (out.length >= 5) break;
+    }
+    return out;
+  }
+
   // --- /status for the operator ----------------------------------------------
 
   status(): string {

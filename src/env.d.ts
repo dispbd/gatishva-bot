@@ -18,4 +18,7 @@ interface Env {
   /** ka, ru or en; Georgian if unset. */
   FB_PAGE_LANG?: string;
   FB_GRAPH_VERSION?: string;
+  /** The Messenger bot (docs/messenger.md): the Meta app's secret and the webhook's verify token. */
+  FB_APP_SECRET?: string;
+  FB_VERIFY_TOKEN?: string;
 }

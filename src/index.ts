@@ -6,6 +6,7 @@
 import { handleUpdate } from "./bot.ts";
 import { hub } from "./hub-do.ts";
 import { syncWebhook } from "./webhook-config.ts";
+import { messengerWebhook } from "./messenger-bot.ts";
 import type { TgUpdate } from "./telegram.ts";
 
 export { Hub } from "./hub-do.ts";
@@ -24,6 +25,8 @@ export default {
       await hub(env).ensureAlarm();
       return new Response("ok\n", { headers: { "content-type": "text/plain" } });
     }
+    // Messenger: GET is Meta's subscription handshake, POST its messages.
+    if (url.pathname === "/fb") return await messengerWebhook(request, env, ctx);
     if (url.pathname === "/tg" && request.method === "POST") {
       return await webhook(request, env, ctx);
     }
