@@ -46,7 +46,12 @@ const LAT_TO_SKEL: Record<string, string> = {
   "y": "i", "z": "z",
 };
 
-const DIGITS = "0123456789";
+function isDigit(ch: string): boolean {
+  return ch >= "0" && ch <= "9";
+}
+
+/** First letters of the digraphs; any other letter skips the digraph search. */
+const DIGRAPH_FIRST = new Set(DIGRAPHS.map(([from]) => from[0]!));
 
 /** A letter in any of the three scripts — what counts as "inside a word". */
 export function isLetter(ch: string | undefined): boolean {
@@ -79,9 +84,9 @@ export function skeletonize(text: string): Skeleton {
   let sawSeparator = true;
 
   const push = (out: string, at: number) => {
-    for (const ch of out) {
-      const last = s[s.length - 1];
-      if (!sawSeparator && last === ch && !DIGITS.includes(ch)) continue;
+    for (let k = 0; k < out.length; k++) {
+      const ch = out[k]!;
+      if (!sawSeparator && s[s.length - 1] === ch && !isDigit(ch)) continue;
       s.push(ch);
       map.push(at);
       starts.push(sawSeparator);
@@ -91,13 +96,21 @@ export function skeletonize(text: string): Skeleton {
 
   for (let i = 0; i < lower.length; ) {
     const ch = lower[i]!;
-    const di = DIGRAPHS.find(([from]) => lower.startsWith(from, i));
+    // The providers' texts are nearly all Georgian, and no Georgian letter
+    // begins a digraph: this path is most of the work, so it goes first.
+    const ka = KA_TO_SKEL[ch];
+    if (ka !== undefined) {
+      push(ka, i);
+      i += 1;
+      continue;
+    }
+    const di = DIGRAPH_FIRST.has(ch) ? DIGRAPHS.find(([from]) => lower.startsWith(from, i)) : undefined;
     if (di) {
       push(di[1], i);
       i += di[0].length;
       continue;
     }
-    const out = KA_TO_SKEL[ch] ?? CYR_TO_SKEL[ch] ?? LAT_TO_SKEL[ch] ?? (DIGITS.includes(ch) ? ch : null);
+    const out = CYR_TO_SKEL[ch] ?? LAT_TO_SKEL[ch] ?? (isDigit(ch) ? ch : null);
     if (out === null) {
       // Apostrophes are how Latin marks ejectives (k'), not word breaks.
       if (ch !== "'" && ch !== "’") sawSeparator = true;
@@ -339,11 +352,40 @@ const TYPE_WORDS: { prefix: string; ru: string; en: string; lead?: boolean; enLe
   { prefix: "da", ru: "и", en: "and", exact: true },
 ];
 
-function typeWord(word: string): (typeof TYPE_WORDS)[number] | undefined {
-  if (!hasGeorgian(word)) return undefined;
-  const k = skel(word);
-  return TYPE_WORDS.find((t) => (t.exact ? k === t.prefix : k.startsWith(t.prefix)));
+type TypeWord = (typeof TYPE_WORDS)[number];
+
+/**
+ * A small memo for the pure functions that rendering calls over and over.
+ * The same street words and addresses recur in every message about an outage
+ * — one per subscribed chat, again on every edit — and the Durable Object's
+ * isolate lives across many of them. Cleared wholesale when full: simpler than
+ * an LRU, and refilling costs only what the first message cost anyway.
+ */
+function memo<V>(limit: number, compute: (key: string) => V): (key: string) => V {
+  const cache = new Map<string, V>();
+  return (key) => {
+    if (cache.has(key)) return cache.get(key)!;
+    const value = compute(key);
+    if (cache.size >= limit) cache.clear();
+    cache.set(key, value);
+    return value;
+  };
 }
+
+const typeWordOf = memo<TypeWord | null>(5000, (word) => {
+  if (!hasGeorgian(word)) return null;
+  const k = skel(word);
+  return TYPE_WORDS.find((t) => (t.exact ? k === t.prefix : k.startsWith(t.prefix))) ?? null;
+});
+
+function typeWord(word: string): TypeWord | undefined {
+  return typeWordOf(word) ?? undefined;
+}
+
+const addressCached = memo<string>(5000, (key) => {
+  const at = key.indexOf("\u0000");
+  return addressUncached(key.slice(at + 1), key.slice(0, at) as Lang);
+});
 
 /** One address as a Russian reader would write it; see addressLocal. */
 export function addressRu(item: string): string {
@@ -357,6 +399,10 @@ export function addressRu(item: string): string {
  */
 export function addressLocal(item: string, lang: Lang): string {
   if (lang === "ka" || !hasGeorgian(item)) return item.trim();
+  return addressCached(`${lang}\u0000${item}`);
+}
+
+function addressUncached(item: string, lang: Lang): string {
   // "N31-39(კენტებს)": the parenthesis is its own word, "odd numbers".
   // A Roman numeral glued to its word ("Iშესახვევის") is two words.
   const tokens = item
