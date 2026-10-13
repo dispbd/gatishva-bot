@@ -13,6 +13,13 @@ export interface Sub {
   label: string;
   /** Skeleton keys, from streetKeys(label); empty for a city. */
   keys: string[];
+  /**
+   * The districts this street is known to be in, Georgian nominative: learned
+   * from notices that list it under a district, or given by the subscriber.
+   * It is what lets a fault that cuts a whole district reach a street's
+   * subscribers, since such a notice names no streets at all.
+   */
+  districts?: string[];
 }
 
 export const DEFAULT_CITY = "თბილისი";
@@ -53,13 +60,50 @@ export function matchOutage(
     if (!utilitiesOf(sub.chatId).includes(o.utility)) continue;
     if (sub.kind === "street") {
       sk ??= skeletonize(text);
-      if (findKeys(text, sub.keys, sk).length === 0) continue;
+      if (findKeys(text, sub.keys, sk).length === 0 && !inCutDistrict(o, sub)) continue;
     }
     const list = out.get(sub.chatId) ?? [];
     list.push(sub);
     out.set(sub.chatId, list);
   }
   return out;
+}
+
+/** The districts an outage cuts as a whole, or none if it lists streets. */
+export function cutDistricts(o: Outage): string[] {
+  if (!o.wholeDistricts) return [];
+  return o.districts ?? (o.district ? [o.district] : []);
+}
+
+/** Whether a street subscription lies in a district the outage cuts whole. */
+export function inCutDistrict(o: Outage, sub: Sub): boolean {
+  const cut = cutDistricts(o);
+  return cut.length > 0 && (sub.districts ?? []).some((d) => cut.some((c) => sameDistrict(c, d)));
+}
+
+/**
+ * Whether two district names overlap. Providers carve the city differently:
+ * Telasi says "სოლოლაკ-მთაწმინდა-კრწანისი" where GWP says "მთაწმინდა", so a
+ * compound name matches any of its parts. Parts compare by skeleton, and one
+ * may be a prefix of the other — "სოლოლაკ" is "სოლოლაკი" without its ending.
+ */
+export function sameDistrict(a: string, b: string): boolean {
+  const pa = a.split("-").map(skel);
+  const pb = b.split("-").map(skel);
+  return pa.some((x) =>
+    pb.some((y) => x === y || (Math.min(x.length, y.length) >= 5 && (x.startsWith(y) || y.startsWith(x)))),
+  );
+}
+
+/**
+ * The district a notice places this street in, if it does: one that lists
+ * streets and names exactly one district. Read from the address list only —
+ * a notice's preamble names the place of the works, which may be next door.
+ */
+export function learnedDistrict(o: Outage, sub: Sub): string | undefined {
+  if (sub.kind !== "street" || sub.city !== citySkel(o.city)) return undefined;
+  if (!o.district || o.districts || o.wholeDistricts || o.addresses.length === 0) return undefined;
+  return findKeys(o.addresses.join(", "), sub.keys).length > 0 ? o.district : undefined;
 }
 
 /** Where the given subscriptions' streets appear in `text`, for highlighting. */

@@ -60,7 +60,7 @@ function liveItem(i: ApiItem): Outage[] {
   if (id === undefined) return [];
   const text = squash(htmlToText(i.editor ?? i.full_title ?? i.title ?? ""));
   return [
-    {
+    wholeIfNoStreets({
       key: `telasi-live:${id}`,
       source: "telasi",
       provider: "Telasi",
@@ -74,8 +74,17 @@ function liveItem(i: ApiItem): Outage[] {
       text,
       addresses: telasiAddresses(text),
       url: `${PAGE}?outage=${encodeURIComponent(String(id))}`,
-    },
+    }),
   ];
+}
+
+/**
+ * An emergency notice that names districts but no streets cuts those districts
+ * whole: notice 5919 of 8 October, a high-voltage fault, said only "to the
+ * Sololaki-Mtatsminda-Krtsanisi and Isani districts".
+ */
+function wholeIfNoStreets(o: Outage): Outage {
+  return o.addresses.length === 0 && o.district ? { ...o, wholeDistricts: true } : o;
 }
 
 function contentItem(i: ContentItem): Outage[] {
@@ -98,7 +107,7 @@ function contentItem(i: ContentItem): Outage[] {
     let text = squash(htmlToText(html));
     if (title && text.startsWith(title)) text = text.slice(title.length).replace(/^[\s.]+/, "");
     return [
-      {
+      wholeIfNoStreets({
         ...base,
         key: `telasi:${i.id}`,
         ...districtFields(text),
@@ -108,7 +117,7 @@ function contentItem(i: ContentItem): Outage[] {
         end: telasiEta(text),
         text,
         addresses: telasiAddresses(text),
-      },
+      }),
     ];
   }
 

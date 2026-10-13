@@ -30,6 +30,33 @@ export function resolveCity(typed: string, known: string[]): string | undefined 
 }
 
 /**
+ * Tbilisi's districts as the providers name them, nominative. Telasi also uses
+ * compounds of these ("მთაწმინდა-კრწანისი"), which match any of their parts.
+ */
+export const TBILISI_DISTRICTS = [
+  "გლდანი", "ნაძალადევი", "დიდუბე", "ჩუღურეთი", "საბურთალო", "ვაკე", "მთაწმინდა",
+  "კრწანისი", "ისანი", "სამგორი", "ვარკეთილი", "დიღომი", "სოლოლაკი", "ავლაბარი",
+];
+
+/** The Tbilisi district a typed name refers to, by skeleton, or undefined. */
+export function resolveDistrict(typed: string): string | undefined {
+  const k = skel(typed);
+  if (k.length < 3) return undefined;
+  return TBILISI_DISTRICTS.find((d) => skel(d) === k) ?? TBILISI_DISTRICTS.find((d) => k.length >= 4 && skel(d).startsWith(k));
+}
+
+/**
+ * "Политковская, Мтацминда": a street and the district it is in, for when the
+ * bot has not yet seen the street in any notice. Anything after the comma that
+ * is not a district stays part of the street ("Политковская, 32").
+ */
+export function splitStreetDistrict(text: string): { street: string; district?: string } {
+  const m = /^\s*(.+?)\s*,\s*([^,]+?)\s*$/.exec(text);
+  const district = m ? resolveDistrict(m[2]!) : undefined;
+  return district ? { street: m![1]!, district } : { street: text.trim() };
+}
+
+/**
  * Split "Батуми, Руставели" / "Батуми: Руставели" into city and street. Without
  * a recognisable city in front, the whole text is a street in Tbilisi.
  */

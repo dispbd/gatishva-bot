@@ -19,6 +19,11 @@ export interface Outage {
   district?: string;
   /** Every district, when the notice names more than one; `district` is the first. */
   districts?: string[];
+  /**
+   * The notice cuts its districts as a whole and names no streets — a fault on
+   * the high-voltage grid. Street subscribers are matched by district instead.
+   */
+  wholeDistricts?: boolean;
   emergency: boolean;
   /** Epoch seconds. Absent when the provider does not say. */
   start?: number;

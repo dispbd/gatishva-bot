@@ -13,7 +13,7 @@
 // The flow on every alarm:  poll due sources → diff → outbox → drain → re-arm.
 import { DurableObject } from "cloudflare:workers";
 import { SOURCES, sourceByName } from "./sources/index.ts";
-import { matchOutage, streetSub, citySub, DEFAULT_CITY } from "./match.ts";
+import { matchOutage, streetSub, citySub, learnedDistrict, DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
 import { fingerprint, isCurrent, sha256, median, MISSES_TO_FINISH } from "./diff.ts";
@@ -78,6 +78,8 @@ export interface AddResult {
   current: number;
   /** A few recent addresses it matched, in Russian, as proof it will work. */
   examples: string[];
+  /** The districts this street is known to be in, Georgian; empty when unknown. */
+  districts: string[];
 }
 
 export class Hub extends DurableObject<Env> {
@@ -110,6 +112,9 @@ export class Hub extends DurableObject<Env> {
         id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, key TEXT NOT NULL,
         op TEXT NOT NULL, tries INTEGER NOT NULL DEFAULT 0, UNIQUE (chat_id, key, op));
       CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
+      CREATE TABLE IF NOT EXISTS sub_districts (
+        sub_id INTEGER NOT NULL, district TEXT NOT NULL, manual INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (sub_id, district));
     `);
     // Added after launch. `first_read` marks what a source already held when the
     // bot first read it: an archive, "seen" only because the bot was switched on,
@@ -134,6 +139,7 @@ export class Hub extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     const now = nowSec();
+    this.backfillDistricts();
     try {
       await this.pollDue(now);
     } catch (e) {
@@ -300,6 +306,8 @@ export class Hub extends DurableObject<Env> {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           o.key, source.name, o.city, fp, JSON.stringify(o), now, now, o.publishedAt ?? null, firstRead ? 1 : 0,
         );
+        // Even an archive teaches where streets are, so this runs on a first read too.
+        this.learnDistricts(o, subs);
         if (!firstRead && isCurrent(o, now, source.live(o.key))) queued += this.queueMatches(o, subs, utilitiesOf, "new");
         continue;
       }
@@ -307,6 +315,7 @@ export class Hub extends DurableObject<Env> {
       this.sql.exec(`UPDATE events SET last_seen = ?, missing = 0, finished_at = NULL WHERE key = ?`, now, o.key);
       if (prev.fp === fp && prev.finished_at === null) continue;
       this.sql.exec(`UPDATE events SET fp = ?, data = ? WHERE key = ?`, fp, JSON.stringify(o), o.key);
+      this.learnDistricts(o, subs);
       for (const s of this.rows<{ chat_id: number }>(`SELECT chat_id FROM sent WHERE key = ?`, o.key)) {
         this.enqueue(s.chat_id, o.key, "edit");
       }
@@ -330,6 +339,34 @@ export class Hub extends DurableObject<Env> {
       }
     }
     return queued;
+  }
+
+  /**
+   * Remember which district each subscribed street was listed under. A fault
+   * that cuts a whole district names no streets, and this is how its notice
+   * still reaches them. `subs` is updated in place, so a notice later in the
+   * same poll already benefits.
+   */
+  private learnDistricts(o: Outage, subs: Sub[]): void {
+    for (const sub of subs) {
+      const district = learnedDistrict(o, sub);
+      if (!district || sub.districts?.includes(district)) continue;
+      this.sql.exec(`INSERT OR IGNORE INTO sub_districts (sub_id, district) VALUES (?, ?)`, sub.id, district);
+      (sub.districts ??= []).push(district);
+    }
+  }
+
+  /**
+   * Once: teach the subscriptions that existed before districts were learned
+   * everything the stored notices know.
+   */
+  private backfillDistricts(): void {
+    if (this.meta("districts_learned")) return;
+    const subs = this.allSubs();
+    for (const ev of this.rows<{ data: string }>(`SELECT data FROM events`)) {
+      this.learnDistricts(JSON.parse(ev.data) as Outage, subs);
+    }
+    this.setMeta("districts_learned", String(nowSec()));
   }
 
   private queueMatches(o: Outage, subs: Sub[], utilitiesOf: (id: number) => Utility[], op: Op): number {
@@ -431,6 +468,7 @@ export class Hub extends DurableObject<Env> {
   }
 
   private forgetChat(chatId: number): void {
+    this.sql.exec(`DELETE FROM sub_districts WHERE sub_id IN (SELECT id FROM subs WHERE chat_id = ?)`, chatId);
     this.sql.exec(`DELETE FROM subs WHERE chat_id = ?`, chatId);
     this.sql.exec(`DELETE FROM outbox WHERE chat_id = ?`, chatId);
     this.sql.exec(`DELETE FROM sent WHERE chat_id = ?`, chatId);
@@ -478,9 +516,18 @@ export class Hub extends DurableObject<Env> {
   // --- subscriptions (called from the webhook) --------------------------------
 
   private allSubs(): Sub[] {
-    return this.rows<{ id: number; chat_id: number; kind: "street" | "city"; city: string; label: string; keys: string }>(
-      `SELECT * FROM subs`,
-    ).map((r) => ({ id: r.id, chatId: r.chat_id, kind: r.kind, city: r.city, label: r.label, keys: JSON.parse(r.keys) }));
+    type Row = { id: number; chat_id: number; kind: "street" | "city"; city: string; label: string; keys: string; districts: string | null };
+    return this.rows<Row>(
+      `SELECT s.*, (SELECT group_concat(district, '|') FROM sub_districts d WHERE d.sub_id = s.id) AS districts FROM subs s`,
+    ).map((r) => ({
+      id: r.id,
+      chatId: r.chat_id,
+      kind: r.kind,
+      city: r.city,
+      label: r.label,
+      keys: JSON.parse(r.keys),
+      districts: r.districts ? r.districts.split("|") : [],
+    }));
   }
 
   subsOf(chatId: number): Sub[] {
@@ -525,25 +572,26 @@ export class Hub extends DurableObject<Env> {
     return this.rows<{ city: string }>(`SELECT DISTINCT city FROM events WHERE city IS NOT NULL`).map((r) => r.city);
   }
 
-  async addStreet(chat: ChatInfo, label: string, city = DEFAULT_CITY): Promise<AddResult> {
+  /** `district`, when given, is the subscriber's own word on where the street is. */
+  async addStreet(chat: ChatInfo, label: string, city = DEFAULT_CITY, district?: string): Promise<AddResult> {
     const sub = streetSub(label, city);
     if (sub.keys.length === 0) {
-      return { ok: false, error: "Слишком коротко — напишите название улицы хотя бы из 4 букв.", current: 0, examples: [] };
+      return { ok: false, error: "Слишком коротко — напишите название улицы хотя бы из 4 букв.", current: 0, examples: [], districts: [] };
     }
     // Outside Tbilisi the city is part of what the subscriber reads back in /list.
     if (city !== DEFAULT_CITY) sub.label = `${cityRu(city)}, ${sub.label}`;
-    return this.add(chat, sub);
+    return this.add(chat, sub, district);
   }
 
   async addCity(chat: ChatInfo, city: string): Promise<AddResult> {
     return this.add(chat, citySub(city));
   }
 
-  private async add(chat: ChatInfo, fresh: Omit<Sub, "id" | "chatId">): Promise<AddResult> {
+  private async add(chat: ChatInfo, fresh: Omit<Sub, "id" | "chatId">, district?: string): Promise<AddResult> {
     this.touchChat(chat);
     const count = this.rows<{ n: number }>(`SELECT COUNT(*) AS n FROM subs WHERE chat_id = ?`, chat.id)[0]?.n ?? 0;
     if (count >= MAX_SUBS_PER_CHAT) {
-      return { ok: false, error: `Уже ${count} подписок — это предел. Удалите лишние в /list.`, current: 0, examples: [] };
+      return { ok: false, error: `Уже ${count} подписок — это предел. Удалите лишние в /list.`, current: 0, examples: [], districts: [] };
     }
     this.sql.exec(
       `INSERT OR IGNORE INTO subs (chat_id, kind, city, label, keys, created) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -552,6 +600,20 @@ export class Hub extends DurableObject<Env> {
     const sub = this.subsOf(chat.id).find(
       (s) => s.kind === fresh.kind && s.city === fresh.city && JSON.stringify(s.keys) === JSON.stringify(fresh.keys),
     )!;
+    if (district) {
+      this.sql.exec(
+        `INSERT OR REPLACE INTO sub_districts (sub_id, district, manual) VALUES (?, ?, 1)`, sub.id, district,
+      );
+      if (!sub.districts?.includes(district)) (sub.districts ??= []).push(district);
+    }
+
+    // Learn where the street is from everything stored first, so that a
+    // district-wide outage happening right now is found below as well.
+    const events = this.rows<EventRow>(`SELECT * FROM events ORDER BY first_seen DESC`).map((ev) => ({
+      ev,
+      o: JSON.parse(ev.data) as Outage,
+    }));
+    for (const { o } of events) this.learnDistricts(o, [sub]);
 
     // Prove it works: recent addresses it would have matched, and anything
     // happening right now goes out at once instead of at the next change.
@@ -559,8 +621,7 @@ export class Hub extends DurableObject<Env> {
     const examples = new Set<string>();
     let current = 0;
     const utilitiesOf = this.utilitiesLookup();
-    for (const ev of this.rows<EventRow>(`SELECT * FROM events ORDER BY first_seen DESC`)) {
-      const o = JSON.parse(ev.data) as Outage;
+    for (const { ev, o } of events) {
       if (!matchOutage(o, [sub], () => UTILITIES).size) continue;
       if (sub.kind === "street" && examples.size < 3) {
         const hit = o.addresses.find((a) => findKeys(a, sub.keys).length);
@@ -578,11 +639,12 @@ export class Hub extends DurableObject<Env> {
       }
     }
     if (current) await this.schedule(nowSec());
-    return { ok: true, sub, current, examples: [...examples] };
+    return { ok: true, sub, current, examples: [...examples], districts: sub.districts ?? [] };
   }
 
   removeSub(chatId: number, id: number): boolean {
     const before = this.subsOf(chatId).length;
+    this.sql.exec(`DELETE FROM sub_districts WHERE sub_id = (SELECT id FROM subs WHERE chat_id = ? AND id = ?)`, chatId, id);
     this.sql.exec(`DELETE FROM subs WHERE chat_id = ? AND id = ?`, chatId, id);
     return this.subsOf(chatId).length < before;
   }

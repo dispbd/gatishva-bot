@@ -77,10 +77,16 @@ export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): s
   // The reader's own streets, in Russian, bold — the line they read first.
   const mine = o.addresses.filter((a) => findKeys(a, streetSubs.flatMap((s) => s.keys)).length > 0);
   if (streetSubs.length) {
-    const shown = mine.length
-      ? mine.map((a) => `<b>${escapeHtml(addressRu(a))}</b>`)
-      : streetSubs.map((s) => `<b>${escapeHtml(s.label)}</b>`);
-    head.push(`📍 ${shown.join(", ")}`);
+    if (mine.length) {
+      head.push(`📍 ${mine.map((a) => `<b>${escapeHtml(addressRu(a))}</b>`).join(", ")}`);
+    } else if (o.wholeDistricts) {
+      // Matched by district, not by name: say so, or the reader looks for
+      // their street in a notice that has none.
+      const labels = streetSubs.map((s) => `<b>${escapeHtml(s.label)}</b>`).join(", ");
+      head.push(`📍 Отключение на весь район, в том числе ${labels}`);
+    } else {
+      head.push(`📍 ${streetSubs.map((s) => `<b>${escapeHtml(s.label)}</b>`).join(", ")}`);
+    }
   }
 
   const foot = footer(o);

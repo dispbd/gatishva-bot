@@ -9,7 +9,8 @@ import { hub } from "./hub-do.ts";
 import type { ChatInfo, AddResult } from "./hub-do.ts";
 import { tg, describe, escapeHtml } from "./telegram.ts";
 import type { TgUpdate, TgMessage, TgCallbackQuery, TgUser } from "./telegram.ts";
-import { splitCityStreet, resolveCity, cityRu } from "./cities.ts";
+import { splitCityStreet, splitStreetDistrict, resolveCity, cityRu } from "./cities.ts";
+import { translitRu } from "./georgian.ts";
 import { DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { UTILITY_ICON, UTILITY_NAME } from "./render.ts";
@@ -25,6 +26,9 @@ const HELP = `Я присылаю отключения <b>воды 💧, све�
 <b>Подписаться на улицу</b> (Тбилиси):
 /add Политковская
 — можно по-русски, латиницей или по-грузински; сколько угодно улиц.
+
+<b>Если вдруг отключат весь район</b>, бот поймёт, что это ваша улица, по прошлым отключениям. Новую улицу можно сразу привязать к району:
+/add Политковская, Мтацминда
 
 <b>В другом городе:</b>
 /add Батуми, Руставели
@@ -162,7 +166,9 @@ async function addStreet(env: Env, m: TgMessage, text: string): Promise<void> {
   if (!(await mayEdit(env, m))) return await send(env, m.chat.id, NOT_ADMIN);
   const h = hub(env);
   const { city, street } = splitCityStreet(text, await h.knownCities());
-  const r = await h.addStreet(chatOf(m), street, city ?? DEFAULT_CITY);
+  // "Политковская, Мтацминда": districts are only known for Tbilisi.
+  const { street: name, district } = city ? { street, district: undefined } : splitStreetDistrict(street);
+  const r = await h.addStreet(chatOf(m), name, city ?? DEFAULT_CITY, district);
   await send(env, m.chat.id, confirmation(r, city ?? DEFAULT_CITY));
 }
 
@@ -186,6 +192,15 @@ function confirmation(r: AddResult, city: string): string {
   } else if (r.sub.kind === "street") {
     lines.push("В недавних отключениях её не было — пришлю, как только появится.");
   }
+  if (r.sub.kind === "street" && city === DEFAULT_CITY) {
+    // A fault that cuts a whole district names no streets; the district is
+    // how such a notice finds this subscription, so say whether it is known.
+    lines.push(
+      r.districts.length
+        ? `Район: ${escapeHtml(r.districts.map(translitRu).join(", "))} — аварии на весь район тоже придут.`
+        : `Район улицы пока не знаю, и аварию на весь район не пришлю. Укажите его: /add ${escapeHtml(r.sub.label)}, Мтацминда`,
+    );
+  }
   if (r.current) lines.push(`Сейчас по ней ${r.current} ${plural(r.current, "отключение", "отключения", "отключений")} — присылаю.`);
   return lines.join("\n");
 }
@@ -199,7 +214,9 @@ function plural(n: number, one: string, few: string, many: string): string {
 }
 
 function subLabel(s: Sub): string {
-  return s.kind === "city" ? `🏙 ${cityRu(s.label)}` : `📍 ${s.label}`;
+  if (s.kind === "city") return `🏙 ${cityRu(s.label)}`;
+  const where = s.districts?.length ? ` · ${s.districts.map(translitRu).join(", ")}` : "";
+  return `📍 ${s.label}${where}`;
 }
 
 async function showList(env: Env, chatId: number, editMessageId?: number): Promise<void> {
