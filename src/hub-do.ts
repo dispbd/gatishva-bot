@@ -23,6 +23,7 @@ import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts"
 import { UTILITIES, wanted } from "./types.ts";
 import type { Outage, Utility, SourceDef, GwpPath } from "./types.ts";
 import type { RelayResult } from "./gwp-relay-do.ts";
+import { FACEBOOK_CHAT, facebookConfig, toPlain, publishPost, editPost, commentOnPost } from "./facebook.ts";
 import {
   REPORTS, REPORT_THRESHOLD, REPORT_WINDOW_SEC, REPORTS_PER_DAY, REPORT_REPEAT_SEC,
   streetStem, sameStreet, reportersFor, signalOutage, confirms,
@@ -145,6 +146,7 @@ export class Hub extends DurableObject<Env> {
         id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, chat_id INTEGER NOT NULL,
         utility TEXT NOT NULL, city TEXT NOT NULL, label TEXT NOT NULL, created INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS reports_by_time ON reports (created);
+      CREATE TABLE IF NOT EXISTS fb_posts (key TEXT PRIMARY KEY, post_id TEXT NOT NULL);
     `);
     // Added after launch. `first_read` marks what a source already held when the
     // bot first read it: an archive, "seen" only because the bot was switched on,
@@ -194,6 +196,7 @@ export class Hub extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const now = nowSec();
     this.backfillDistricts();
+    this.reconcileFacebook();
     try {
       await this.pollDue(now);
     } catch (e) {
@@ -447,6 +450,8 @@ export class Hub extends DurableObject<Env> {
     const off = o.source === REPORTS.name ? this.reportsOff() : undefined;
     for (const chatId of matchOutage(o, subs, utilitiesOf).keys()) {
       if (off?.has(chatId)) continue;
+      // Residents' unconfirmed signals stay off the public Page.
+      if (chatId === FACEBOOK_CHAT && o.source === REPORTS.name) continue;
       const already = this.rows(`SELECT 1 FROM sent WHERE key = ? AND chat_id = ?`, o.key, chatId).length > 0;
       if (already && op === "new") continue;
       this.enqueue(chatId, o.key, op);
@@ -594,6 +599,7 @@ export class Hub extends DurableObject<Env> {
     if (mine.length === 0 && (op === "new" || op === "repeat")) return;
     const lang = this.langOf(chatId);
     const text = renderOutage(o, mine, { finished: ev.finished_at !== null, lang });
+    if (chatId === FACEBOOK_CHAT) return await this.deliverFacebook(o, op, text, lang);
     const sent = this.rows<{ message_id: number }>(
       `SELECT message_id FROM sent WHERE key = ? AND chat_id = ?`, key, chatId,
     )[0];
@@ -639,6 +645,58 @@ export class Hub extends DurableObject<Env> {
     }
   }
 
+  // --- the Facebook Page (see src/facebook.ts) -------------------------------
+
+  /**
+   * Keep the Page's pseudo-chat subscribed to exactly the cities configured,
+   * and to nothing while the Page is not set up: then nothing is ever queued
+   * for it. Cheap enough for every alarm, and a change of settings needs no
+   * other step than a deploy.
+   */
+  private reconcileFacebook(): void {
+    const cfg = facebookConfig(this.env);
+    const have = this.rows<{ id: number; kind: string; city: string }>(
+      `SELECT id, kind, city FROM subs WHERE chat_id = ?`, FACEBOOK_CHAT,
+    );
+    const want = new Set((cfg?.cities ?? []).map(citySkel));
+    for (const s of have) if (s.kind !== "city" || !want.has(s.city)) this.sql.exec(`DELETE FROM subs WHERE id = ?`, s.id);
+    if (!cfg) return;
+    if (this.langOf(FACEBOOK_CHAT) !== cfg.lang || !this.rows(`SELECT 1 FROM chats WHERE id = ?`, FACEBOOK_CHAT).length) {
+      this.setLang(FACEBOOK_CHAT, cfg.lang);
+    }
+    for (const city of cfg.cities) {
+      const sub = citySub(city);
+      if (have.some((s) => s.kind === "city" && s.city === sub.city)) continue;
+      this.sql.exec(
+        `INSERT OR IGNORE INTO subs (chat_id, kind, city, label, keys, created) VALUES (?, ?, ?, ?, ?, ?)`,
+        FACEBOOK_CHAT, sub.kind, sub.city, sub.label, JSON.stringify(sub.keys), nowSec(),
+      );
+    }
+  }
+
+  /** The Page's version of deliver: a post, an edit of it, a closing comment. */
+  private async deliverFacebook(o: Outage, op: Op, html: string, lang: Lang): Promise<void> {
+    const cfg = facebookConfig(this.env);
+    if (!cfg) return; // switched off since this was queued
+    const post = this.rows<{ post_id: string }>(`SELECT post_id FROM fb_posts WHERE key = ?`, o.key)[0]?.post_id;
+    const text = toPlain(html);
+    if (op === "new" || op === "repeat") {
+      // A Page has no /now: a repeat would only post the same thing twice.
+      if (post) return;
+      const id = await publishPost(cfg, text);
+      this.sql.exec(`INSERT OR REPLACE INTO fb_posts (key, post_id) VALUES (?, ?)`, o.key, id);
+      return;
+    }
+    if (!post) return;
+    await editPost(cfg, post, text);
+    if (op === "finished") {
+      const S = t(lang);
+      const icon = UTILITY_ICON[o.utility];
+      const done = o.utility === "weather" ? S.warningLiftedReply(icon, o.provider) : S.finishedReply(icon, o.provider);
+      await commentOnPost(cfg, post, toPlain(done));
+    }
+  }
+
   private forgetChat(chatId: number): void {
     this.sql.exec(`DELETE FROM sub_districts WHERE sub_id IN (SELECT id FROM subs WHERE chat_id = ?)`, chatId);
     this.sql.exec(`DELETE FROM subs WHERE chat_id = ?`, chatId);
@@ -681,6 +739,7 @@ export class Hub extends DurableObject<Env> {
     if (now - last < 3600) return;
     const cutoff = now - KEEP_EVENTS_SEC;
     this.sql.exec(`DELETE FROM sent WHERE key IN (SELECT key FROM events WHERE last_seen < ?)`, cutoff);
+    this.sql.exec(`DELETE FROM fb_posts WHERE key IN (SELECT key FROM events WHERE last_seen < ?)`, cutoff);
     this.sql.exec(`DELETE FROM events WHERE last_seen < ?`, cutoff);
     this.sql.exec(`DELETE FROM reports WHERE created < ?`, now - 2 * 86400);
     this.sql.exec(`INSERT OR REPLACE INTO meta (k, v) VALUES ('gc', ?)`, String(now));
@@ -892,6 +951,27 @@ export class Hub extends DurableObject<Env> {
     }
     if (n) await this.schedule(nowSec());
     return n;
+  }
+
+  /**
+   * What is off now on a street, for someone not subscribed to it: the
+   * Messenger bot's one question. Newest first, at most five.
+   */
+  currentFor(label: string, cityName: string): Outage[] {
+    const sub: Sub = { id: -1, chatId: -1, ...streetSub(label, cityName) };
+    if (sub.keys.length === 0) return [];
+    const now = nowSec();
+    const rows = this.rows<{ data: string }>(
+      `SELECT data FROM events WHERE current_until > ? AND finished_at IS NULL AND city = ? ORDER BY first_seen DESC`,
+      now, cityName,
+    );
+    const out: Outage[] = [];
+    for (const r of rows) {
+      const o = JSON.parse(r.data) as Outage;
+      if (matchOutage(o, [sub], () => UTILITIES).size) out.push(o);
+      if (out.length >= 5) break;
+    }
+    return out;
   }
 
   // --- /status for the operator ----------------------------------------------

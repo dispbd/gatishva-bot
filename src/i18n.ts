@@ -66,6 +66,10 @@ export interface Strings {
   reportLimit: string;
   reportOfficial: (provider: string) => string;
   reportsToggle: string;
+  // --- Messenger ---
+  messengerHelp: (bot: string) => string;
+  messengerNone: (street: string, bot: string) => string;
+  messengerMore: (more: number, bot: string) => string;
   warningLiftedReply: (icon: string, provider: string) => string;
   roadClosed: string;
   roadRestored: string;
@@ -141,6 +145,9 @@ const ru: Strings = {
   reportLimit: "На сегодня сообщений достаточно — спасибо!",
   reportOfficial: (p) => `Об этом уже известно официально (${p}) — смотрите /now.`,
   reportsToggle: "👥 Сообщения жителей",
+  messengerHelp: (bot) => `Напишите улицу — например, «Политковская» или «Батуми, Руставели», — и я скажу, нет ли там сейчас отключений воды, света или газа.\n\nПолучать уведомления сразу, как отключение объявят, можно в Telegram: ${bot}`,
+  messengerNone: (street, bot) => `✅ Сейчас на «${street}» отключений нет.\n\nЧтобы узнать сразу, когда они появятся, подпишитесь в Telegram: ${bot}`,
+  messengerMore: (more, bot) => (more > 0 ? `И ещё ${more}. ` : "") + `Уведомления по этой улице — в Telegram: ${bot}`,
   roadClosed: "⛔ Движение ограничено",
   roadRestored: "✅ Движение восстановлено",
   finished: (p) => `✅ <b>Завершено</b> — ${p} убрал отключение из списка текущих`,
@@ -249,6 +256,9 @@ const en: Strings = {
   reportLimit: "That's plenty of reports for today — thank you!",
   reportOfficial: (p) => `This is already known officially (${p}) — see /now.`,
   reportsToggle: "👥 Residents' reports",
+  messengerHelp: (bot) => `Write a street — "Politkovskaya" or "Batumi, Rustaveli", say — and I'll tell you whether water, power or gas is off there right now.\n\nFor alerts the moment an outage is announced, use Telegram: ${bot}`,
+  messengerNone: (street, bot) => `✅ Nothing is off on "${street}" right now.\n\nTo hear the moment something is, follow it in Telegram: ${bot}`,
+  messengerMore: (more, bot) => (more > 0 ? `And ${more} more. ` : "") + `Alerts for this street: ${bot}`,
   roadClosed: "⛔ Traffic restricted",
   roadRestored: "✅ Traffic restored",
   finished: (p) => `✅ <b>Over</b> — ${p} has taken it off its list of current outages`,
@@ -358,6 +368,9 @@ const ka: Strings = {
   reportLimit: "დღეისთვის საკმარისი შეტყობინებაა — გმადლობთ!",
   reportOfficial: (p) => `ეს უკვე ოფიციალურადაა ცნობილი (${p}) — იხილეთ /now.`,
   reportsToggle: "👥 მაცხოვრებლების შეტყობინებები",
+  messengerHelp: (bot) => `დაწერეთ ქუჩა — მაგალითად, „პოლიტკოვსკაია“ ან „ბათუმი, რუსთაველი“ — და გეტყვით, არის თუ არა იქ ახლა წყლის, შუქის ან გაზის გათიშვა.\n\nშეტყობინებები გათიშვის გამოცხადებისთანავე — Telegram-ში: ${bot}`,
+  messengerNone: (street, bot) => `✅ „${street}“-ზე ახლა გათიშვა არ არის.\n\nრომ მაშინვე გაიგოთ, გამოიწერეთ Telegram-ში: ${bot}`,
+  messengerMore: (more, bot) => (more > 0 ? `და კიდევ ${more}. ` : "") + `ამ ქუჩის შეტყობინებები — Telegram-ში: ${bot}`,
   roadClosed: "⛔ მოძრაობა შეზღუდულია",
   roadRestored: "✅ მოძრაობა აღდგა",
   finished: (p) => `✅ <b>დასრულდა</b> — ${p}-მ გათიშვა მიმდინარეების სიიდან ამოიღო`,

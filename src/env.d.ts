@@ -7,4 +7,18 @@ interface Env {
   TG_WEBHOOK_SECRET: string;
   /** Optional: the operator's own chat, for "a source is broken" alerts and /status. */
   TELEGRAM_ALERT_CHAT_ID?: string;
+  /**
+   * The Facebook Page (docs/facebook.md). Off while either of the first two is
+   * missing. FB_PAGE_TOKEN is a secret; the rest are plain vars.
+   */
+  FB_PAGE_ID?: string;
+  FB_PAGE_TOKEN?: string;
+  /** Comma-separated Georgian city names the Page follows; Tbilisi if unset. */
+  FB_PAGE_CITIES?: string;
+  /** ka, ru or en; Georgian if unset. */
+  FB_PAGE_LANG?: string;
+  FB_GRAPH_VERSION?: string;
+  /** The Messenger bot (docs/messenger.md): the Meta app's secret and the webhook's verify token. */
+  FB_APP_SECRET?: string;
+  FB_VERIFY_TOKEN?: string;
 }
