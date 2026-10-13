@@ -729,9 +729,15 @@ export class Hub extends DurableObject<Env> {
          AND city IN (${cities.map(() => "?").join(", ")}) ORDER BY first_seen`,
       now, ...cities,
     );
+    // A city subscription covers every outage in its city, so streets there
+    // need no matching — which is the expensive part.
+    const wholeCities = new Set(subs.filter((s) => s.kind === "city").map((s) => s.city));
+    const streets = subs.filter((s) => s.kind === "street");
+    const utilities = utilitiesOf(chatId);
     for (const ev of rows) {
       const o = JSON.parse(ev.data) as Outage;
-      if (!matchOutage(o, subs, utilitiesOf).has(chatId)) continue;
+      if (!utilities.includes(o.utility)) continue;
+      if (!wholeCities.has(citySkel(o.city)) && !matchOutage(o, streets, utilitiesOf).has(chatId)) continue;
       this.enqueue(chatId, o.key, "repeat");
       if (++n >= 15) break;
     }
