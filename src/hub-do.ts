@@ -23,6 +23,10 @@ import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts"
 import { UTILITIES, wanted } from "./types.ts";
 import type { Outage, Utility, SourceDef, GwpPath } from "./types.ts";
 import type { RelayResult } from "./gwp-relay-do.ts";
+import {
+  REPORTS, REPORT_THRESHOLD, REPORT_WINDOW_SEC, REPORTS_PER_DAY, REPORT_REPEAT_SEC,
+  streetStem, sameStreet, reportersFor, signalOutage, confirms,
+} from "./reports.ts";
 import { t, isLang } from "./i18n.ts";
 import type { Lang } from "./i18n.ts";
 
@@ -83,6 +87,12 @@ export interface ChatInfo {
   title?: string;
 }
 
+export type ReportResult =
+  | { status: "too_short" | "limit" | "repeat" }
+  | { status: "official"; provider: string }
+  | { status: "counted"; count: number; need: number }
+  | { status: "signal"; count: number };
+
 export interface AddResult {
   ok: boolean;
   /** Why not, when !ok; the bot words it in the chat's language. */
@@ -131,6 +141,10 @@ export class Hub extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS sub_districts (
         sub_id INTEGER NOT NULL, district TEXT NOT NULL, manual INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (sub_id, district));
+      CREATE TABLE IF NOT EXISTS reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, chat_id INTEGER NOT NULL,
+        utility TEXT NOT NULL, city TEXT NOT NULL, label TEXT NOT NULL, created INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS reports_by_time ON reports (created);
     `);
     // Added after launch. `first_read` marks what a source already held when the
     // bot first read it: an archive, "seen" only because the bot was switched on,
@@ -139,6 +153,10 @@ export class Hub extends DurableObject<Env> {
     // which were all Russian-speaking, and the readers treat NULL as Russian.
     const chatColumns = this.rows<{ name: string }>(`PRAGMA table_info(chats)`).map((c) => c.name);
     if (!chatColumns.includes("lang")) this.sql.exec(`ALTER TABLE chats ADD COLUMN lang TEXT`);
+    // Residents' signals are on unless a chat turns them off in /types.
+    if (!chatColumns.includes("reports_off")) {
+      this.sql.exec(`ALTER TABLE chats ADD COLUMN reports_off INTEGER NOT NULL DEFAULT 0`);
+    }
     const columns = this.rows<{ name: string }>(`PRAGMA table_info(events)`).map((c) => c.name);
     if (!columns.includes("current_until")) {
       // When each outage stops being current (see currentUntil), so that /now
@@ -350,6 +368,7 @@ export class Hub extends DurableObject<Env> {
         );
         // Even an archive teaches where streets are, so this runs on a first read too.
         this.learnDistricts(o, subs);
+        if (!firstRead && source.name !== REPORTS.name) this.confirmSignals(o, now);
         if (!firstRead && isCurrent(o, now, source.live(o.key))) queued += this.queueMatches(o, subs, utilitiesOf, "new");
         continue;
       }
@@ -365,6 +384,7 @@ export class Hub extends DurableObject<Env> {
         fp, JSON.stringify(o), currentUntil(o, source.live(o.key)), o.key,
       );
       this.learnDistricts(o, subs);
+      if (source.name !== REPORTS.name) this.confirmSignals(o, now);
       for (const s of this.rows<{ chat_id: number }>(`SELECT chat_id FROM sent WHERE key = ?`, o.key)) {
         this.enqueue(s.chat_id, o.key, "edit");
       }
@@ -424,13 +444,108 @@ export class Hub extends DurableObject<Env> {
 
   private queueMatches(o: Outage, subs: Sub[], utilitiesOf: (id: number) => Utility[], op: Op): number {
     let n = 0;
+    const off = o.source === REPORTS.name ? this.reportsOff() : undefined;
     for (const chatId of matchOutage(o, subs, utilitiesOf).keys()) {
+      if (off?.has(chatId)) continue;
       const already = this.rows(`SELECT 1 FROM sent WHERE key = ? AND chat_id = ?`, o.key, chatId).length > 0;
       if (already && op === "new") continue;
       this.enqueue(chatId, o.key, op);
       n++;
     }
     return n;
+  }
+
+  // --- residents' reports (see src/reports.ts) --------------------------------
+
+  private reportsOff(): Set<number> {
+    return new Set(this.rows<{ id: number }>(`SELECT id FROM chats WHERE reports_off = 1`).map((r) => r.id));
+  }
+
+  reportsOn(chatId: number): boolean {
+    return !this.reportsOff().has(chatId);
+  }
+
+  toggleReports(chatId: number): boolean {
+    const on = this.reportsOn(chatId);
+    this.sql.exec(
+      `INSERT INTO chats (id, created, reports_off) VALUES (?, ?, ?) ON CONFLICT (id) DO UPDATE SET reports_off = excluded.reports_off`,
+      chatId, nowSec(), on ? 1 : 0,
+    );
+    return !on;
+  }
+
+  /** Current residents' signals in a city, as stored. */
+  private signalsIn(city: string, now: number): Outage[] {
+    return this.rows<{ data: string }>(
+      `SELECT data FROM events WHERE source = ? AND city = ? AND current_until > ?`, REPORTS.name, city, now,
+    ).map((r) => JSON.parse(r.data) as Outage);
+  }
+
+  /** A provider's outage marks the residents' signal about the same thing confirmed. */
+  private confirmSignals(o: Outage, now: number): void {
+    for (const signal of this.signalsIn(o.city, now)) {
+      if (signal.reports?.confirmedBy || !confirms(o, signal)) continue;
+      const confirmed = { ...signal, reports: { ...signal.reports!, confirmedBy: o.provider, confirmedAt: now } };
+      // Through the diff, so every chat that has the signal sees it edited.
+      this.diff(REPORTS, [confirmed], now, false);
+      console.log(`[reports] ${signal.key} confirmed by ${o.provider}, ${Math.round((now - signal.reports!.since) / 60)} min after the first report`);
+    }
+  }
+
+  /**
+   * One resident's report. Counted only once per person, street and utility
+   * in two hours, ten a day per person; turned into a signal for neighbours
+   * once REPORT_THRESHOLD different people agree within the window.
+   */
+  reportOutage(chat: ChatInfo, userId: number, utility: Utility, label: string, cityName: string): ReportResult {
+    const now = nowSec();
+    this.touchChat(chat);
+    if (!streetStem(label)) return { status: "too_short" };
+    const city = citySkel(cityName);
+    // Already known officially: say so instead of counting it.
+    const probe = { ...signalOutage({ key: "", utility, city: cityName, label, count: 0, since: now }) };
+    for (const ev of this.rows<{ data: string }>(
+      `SELECT data FROM events WHERE source != ? AND city = ? AND current_until > ? AND finished_at IS NULL`,
+      REPORTS.name, cityName, now,
+    )) {
+      const o = JSON.parse(ev.data) as Outage;
+      if (confirms(o, probe)) return { status: "official", provider: o.provider };
+    }
+    const mine = this.rows<{ utility: Utility; label: string; city: string; created: number }>(
+      `SELECT utility, label, city, created FROM reports WHERE user_id = ? AND created > ?`, userId, now - 86400,
+    );
+    if (mine.length >= REPORTS_PER_DAY) return { status: "limit" };
+    if (mine.some((r) => r.utility === utility && r.city === city && r.created > now - REPORT_REPEAT_SEC && sameStreet(r.label, label))) {
+      return { status: "repeat" };
+    }
+    this.sql.exec(
+      `INSERT INTO reports (user_id, chat_id, utility, city, label, created) VALUES (?, ?, ?, ?, ?, ?)`,
+      userId, chat.id, utility, city, label.trim(), now,
+    );
+
+    // A signal on this street already going out: one more voice in it.
+    const active = this.signalsIn(cityName, now).find((sig) => sig.utility === utility && sameStreet(sig.text, label));
+    if (active?.reports) {
+      const count = active.reports.count + 1;
+      this.diff(REPORTS, [{ ...active, reports: { ...active.reports, count } }], now, false);
+      void this.schedule(now);
+      return { status: "signal", count };
+    }
+
+    const recent = this.rows<{ user_id: number; utility: Utility; city: string; label: string; created: number }>(
+      `SELECT user_id, utility, city, label, created FROM reports WHERE created > ?`, now - REPORT_WINDOW_SEC,
+    ).map((r) => ({ userId: r.user_id, utility: r.utility, city: r.city, label: r.label, created: r.created }));
+    const count = reportersFor(recent, { utility, city, label }, now);
+    if (count < REPORT_THRESHOLD) return { status: "counted", count, need: REPORT_THRESHOLD };
+
+    const since = Math.min(
+      ...recent.filter((r) => r.utility === utility && r.city === city && sameStreet(r.label, label)).map((r) => r.created),
+    );
+    const signal = signalOutage({ key: `report:${utility}:${city}:${streetStem(label)}:${now}`, utility, city: cityName, label: label.trim(), count, since });
+    this.diff(REPORTS, [signal], now, false);
+    console.log(`[reports] signal ${signal.key}: ${count} people in ${Math.round((now - since) / 60)} min`);
+    void this.schedule(now);
+    return { status: "signal", count };
   }
 
   private enqueue(chatId: number, key: string, op: Op): void {
@@ -513,7 +628,10 @@ export class Hub extends DurableObject<Env> {
     if (op === "finished") {
       await tg(this.env, "sendMessage", {
         chat_id: chatId,
-        text: t(lang).finishedReply(UTILITY_ICON[o.utility], escapeHtml(o.provider)),
+        text:
+          o.utility === "weather"
+            ? t(lang).warningLiftedReply(UTILITY_ICON[o.utility], escapeHtml(o.provider))
+            : t(lang).finishedReply(UTILITY_ICON[o.utility], escapeHtml(o.provider)),
         parse_mode: "HTML",
         disable_notification: true,
         reply_parameters: { message_id: sent.message_id, allow_sending_without_reply: true },
@@ -564,6 +682,7 @@ export class Hub extends DurableObject<Env> {
     const cutoff = now - KEEP_EVENTS_SEC;
     this.sql.exec(`DELETE FROM sent WHERE key IN (SELECT key FROM events WHERE last_seen < ?)`, cutoff);
     this.sql.exec(`DELETE FROM events WHERE last_seen < ?`, cutoff);
+    this.sql.exec(`DELETE FROM reports WHERE created < ?`, now - 2 * 86400);
     this.sql.exec(`INSERT OR REPLACE INTO meta (k, v) VALUES ('gc', ?)`, String(now));
   }
 
@@ -762,9 +881,11 @@ export class Hub extends DurableObject<Env> {
     const wholeCities = new Set(subs.filter((s) => s.kind === "city").map((s) => s.city));
     const streets = subs.filter((s) => s.kind === "street");
     const utilities = utilitiesOf(chatId);
+    const reportsOn = this.reportsOn(chatId);
     for (const ev of rows) {
       const o = JSON.parse(ev.data) as Outage;
       if (!wanted(o.utility, utilities)) continue;
+      if (o.source === REPORTS.name && !reportsOn) continue;
       if (!wholeCities.has(citySkel(o.city)) && !matchOutage(o, streets, utilitiesOf).has(chatId)) continue;
       this.enqueue(chatId, o.key, "repeat");
       if (++n >= 15) break;

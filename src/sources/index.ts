@@ -10,10 +10,12 @@ import { telasi } from "./telasi.ts";
 import { te } from "./te.ts";
 import { energo, socar, uwsc } from "./regions.ts";
 import { georoad } from "./georoad.ts";
+import { meteo } from "./meteo.ts";
+import { REPORTS } from "../reports.ts";
 import type { SourceDef } from "../types.ts";
 
-export const SOURCES: SourceDef[] = [gwp, gwpPlanned, telasi, te, energo, socar, uwsc, georoad];
+export const SOURCES: SourceDef[] = [gwp, gwpPlanned, telasi, te, energo, socar, uwsc, georoad, meteo];
 
 export function sourceByName(name: string): SourceDef | undefined {
-  return SOURCES.find((s) => s.name === name);
+  return SOURCES.find((s) => s.name === name) ?? (name === REPORTS.name ? REPORTS : undefined);
 }

@@ -17,7 +17,7 @@ import { escapeHtml } from "./telegram.ts";
 import { fmtDateTime, fmtRange, TBILISI_OFFSET_SEC } from "./time.ts";
 import type { Outage, Utility } from "./types.ts";
 
-export const UTILITY_ICON: Record<Utility, string> = { water: "💧", power: "💡", gas: "🔥", road: "🚧" };
+export const UTILITY_ICON: Record<Utility, string> = { water: "💧", power: "💡", gas: "🔥", road: "🚧", weather: "⛈" };
 
 /** Telegram's limit is 4096 characters of visible text; this leaves headroom. */
 const LIMIT = 4000;
@@ -42,6 +42,15 @@ const REASONS: [RegExp, Reason][] = [
   [/პროფილაქტ/, "maintenance"],
   [/გადაუდებ/, "urgent"],
   [/სამუშაო/, "works"],
+  // Weather warnings' own words, after the rest: a utility notice may mention
+  // the rain that caused the damage, and the damage is what it is about.
+  [/შტორმ/, "storm"],
+  [/სეტყვ/, "hail"],
+  [/ჭექა|ელჭექ/, "thunder"],
+  [/ქარ(?!თ)/, "wind"],
+  [/წვიმ|ნალექ/, "rain"],
+  [/სიცხ|სიცხე|ცხელ/, "heat"],
+  [/წაყინვ|ყინვ/, "frost"],
 ];
 
 export function reasonOf(o: Outage, lang: Lang = "ru"): string | undefined {
@@ -84,12 +93,20 @@ export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): s
     : [translit(o.city, lang), districts.map((d) => translit(d, lang)).join(S.and)].filter(Boolean).join(", ");
 
   const head: string[] = [];
-  if (state.finished) head.push(S.finished(escapeHtml(o.provider)));
+  if (state.finished) {
+    head.push(o.utility === "weather" ? S.warningLifted(escapeHtml(o.provider)) : S.finished(escapeHtml(o.provider)));
+  }
   head.push(`${UTILITY_ICON[o.utility]} <b>${S.utility[o.utility]} · ${escapeHtml(place)}</b>`);
+
+  if (o.reports) return renderSignal(o, streetSubs, head, lang);
 
   const reason = reasonOf(o, lang);
   const kind =
-    o.utility === "road" ? (o.over ? S.roadRestored : S.roadClosed) : o.emergency ? S.emergency : S.planned;
+    o.utility === "road"
+      ? o.over ? S.roadRestored : S.roadClosed
+      : o.utility === "weather"
+        ? S.level[(o.level ?? 1) - 1]!
+        : o.emergency ? S.emergency : S.planned;
   head.push(reason ? `${kind} · ${reason}` : kind);
 
   const when = timeLine(o, lang);
@@ -136,6 +153,22 @@ export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): s
   }
 
   return [head.join("\n"), ...blocks, foot].join("\n");
+}
+
+/**
+ * A residents' signal: who says what, since when, and whether a provider has
+ * confirmed it. No provider text to quote and no link to follow, so no
+ * quotes and no footer.
+ */
+function renderSignal(o: Outage, streetSubs: Sub[], head: string[], lang: Lang): string {
+  const S = t(lang);
+  const r = o.reports!;
+  const minutes = Math.max(1, Math.round(((r.confirmedAt ?? Date.now() / 1000) - r.since) / 60));
+  head.push(S.reportsKind(r.count, Math.max(1, Math.round((Date.now() / 1000 - r.since) / 60))));
+  head.push(r.confirmedBy ? S.reportsConfirmed(escapeHtml(r.confirmedBy), minutes) : S.reportsUnconfirmed);
+  const labels = streetSubs.length ? streetSubs.map((s) => s.label) : o.addresses.map((a) => addressLocal(a, lang));
+  head.push(`📍 ${labels.map((l) => `<b>${escapeHtml(l)}</b>`).join(", ")}`);
+  return head.join("\n");
 }
 
 function timeLine(o: Outage, lang: Lang): string {

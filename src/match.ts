@@ -66,7 +66,11 @@ export function matchOutage(
   for (const sub of subs) {
     if (sub.city !== city) continue;
     if (!wanted(o.utility, utilitiesOf(sub.chatId))) continue;
-    if (sub.kind === "street" || sub.kind === "road") {
+    // A weather warning covers the whole municipality: anyone following a
+    // street or the city there gets it, no street matching needed.
+    if (o.utility === "weather") {
+      if (sub.kind === "road") continue;
+    } else if (sub.kind === "street" || sub.kind === "road") {
       sk ??= skeletonize(text);
       if (findKeys(text, sub.keys, sk).length === 0 && !inCutDistrict(o, sub)) continue;
     }

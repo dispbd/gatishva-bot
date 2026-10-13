@@ -9,11 +9,11 @@
 // Everything is said in the chat's language (see src/i18n.ts), which every
 // update looks up first: a new chat takes its first user's Telegram language.
 import { hub } from "./hub-do.ts";
-import type { ChatInfo, AddResult } from "./hub-do.ts";
+import type { ChatInfo, AddResult, ReportResult } from "./hub-do.ts";
 import { tg, describe, escapeHtml } from "./telegram.ts";
 import type { TgUpdate, TgMessage, TgCallbackQuery, TgUser } from "./telegram.ts";
-import { splitCityStreet, splitStreetDistrict, resolveCity } from "./cities.ts";
-import { translit, addressLocal } from "./georgian.ts";
+import { splitCityStreet, splitStreetDistrict, resolveCity, KNOWN_CITIES } from "./cities.ts";
+import { translit, addressLocal, skel } from "./georgian.ts";
 import { DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { UTILITY_ICON } from "./render.ts";
@@ -84,6 +84,9 @@ async function onText(env: Env, m: TgMessage): Promise<void> {
   if (prompt?.from?.id === botId(env) && prompt.text) {
     if (inEveryLang((s) => s.promptStreet).some((p) => prompt.text!.startsWith(p))) return await addStreet(env, m, text, lang);
     if (inEveryLang((s) => s.promptCity).some((p) => prompt.text!.startsWith(p))) return await addCity(env, m, text, lang);
+    for (const u of REPORTABLE) {
+      if (inEveryLang((s) => s.reportPrompt[u]).some((p) => prompt.text!.startsWith(p))) return await report(env, m.chat, m.from, u, text, lang);
+    }
   }
 
   const cmd = /^\/([a-z_]+)(?:@(\w+))?(?:\s+([\s\S]*))?$/i.exec(text);
@@ -117,6 +120,8 @@ async function onText(env: Env, m: TgMessage): Promise<void> {
       return await showNow(env, chat.id, lang);
     case "lang":
       return await showLangs(env, chat.id, lang);
+    case "report":
+      return await askReport(env, chat, lang);
     case "status":
       if (String(chat.id) === env.TELEGRAM_ALERT_CHAT_ID) return await send(env, chat.id, await hub(env).status());
       return;
@@ -160,6 +165,53 @@ async function addCity(env: Env, m: TgMessage, text: string, lang: Lang): Promis
   if (!city) return await send(env, m.chat.id, t(lang).unknownCity(escapeHtml(text)));
   const r = await h.addCity(chatOf(m.chat), city);
   await send(env, m.chat.id, confirmation(r, city, lang));
+}
+
+// --- residents' reports (see src/reports.ts) ----------------------------------
+
+const REPORTABLE = ["water", "power", "gas"] as const;
+type Reportable = (typeof REPORTABLE)[number];
+
+async function askReport(env: Env, chat: ChatInfo, lang: Lang): Promise<void> {
+  const S = t(lang);
+  // In a group a report would be everyone's business; one person, one voice.
+  if (chat.type !== "private") return await send(env, chat.id, S.reportPrivateOnly);
+  await send(env, chat.id, S.reportAsk, {
+    reply_markup: { inline_keyboard: [REPORTABLE.map((u) => ({ text: S.reportWhat[u], callback_data: `rep:${u}` }))] },
+  });
+}
+
+/** A subscription's city back as the Georgian name the providers use. */
+function cityNameOf(citySkeleton: string, known: string[]): string {
+  return [DEFAULT_CITY, ...KNOWN_CITIES, ...known].find((c) => skel(c) === citySkeleton) ?? DEFAULT_CITY;
+}
+
+async function report(env: Env, chat: { id: number; type: string; title?: string }, from: TgUser | undefined, u: Reportable, text: string, lang: Lang): Promise<void> {
+  const S = t(lang);
+  if (chat.type !== "private" || !from) return await send(env, chat.id, S.reportPrivateOnly);
+  const h = hub(env);
+  const { city, street } = splitCityStreet(text, await h.knownCities());
+  const r = await h.reportOutage(chatOf(chat), from.id, u, street, city ?? DEFAULT_CITY);
+  await send(env, chat.id, reportReply(r, lang));
+}
+
+function reportReply(r: ReportResult, lang: Lang): string {
+  const S = t(lang);
+  switch (r.status) {
+    case "too_short": return S.tooShort;
+    case "limit": return S.reportLimit;
+    case "repeat": return S.reportRepeat;
+    case "official": return S.reportOfficial(escapeHtml(r.provider));
+    case "counted": return S.reportCounted(r.count, r.need);
+    case "signal": return S.reportSignal(r.count);
+  }
+}
+
+async function askReportStreet(env: Env, chatId: number, u: Reportable, lang: Lang): Promise<void> {
+  const S = t(lang);
+  await send(env, chatId, S.reportPrompt[u], {
+    reply_markup: { force_reply: true, input_field_placeholder: S.streetExample },
+  });
 }
 
 async function addRoad(env: Env, m: TgMessage, text: string, lang: Lang): Promise<void> {
@@ -211,20 +263,22 @@ async function showList(env: Env, chatId: number, lang: Lang, editMessageId?: nu
   else await tg(env, "sendMessage", payload);
 }
 
-function typesKeyboard(on: Utility[], lang: Lang) {
+function typesKeyboard(on: Utility[], reportsOn: boolean, lang: Lang) {
   return {
     inline_keyboard: [
       UTILITIES.map((u) => ({
         text: `${on.includes(u) ? "✅" : "▫️"} ${UTILITY_ICON[u]} ${t(lang).utility[u]}`,
         callback_data: `tog:${u}`,
       })),
+      [{ text: `${reportsOn ? "✅" : "▫️"} ${t(lang).reportsToggle}`, callback_data: "tog:reports" }],
     ],
   };
 }
 
 async function showTypes(env: Env, chatId: number, lang: Lang): Promise<void> {
-  const on = await hub(env).utilities(chatId);
-  await send(env, chatId, t(lang).typesTitle, { reply_markup: typesKeyboard(on, lang) });
+  const h = hub(env);
+  const [on, reportsOn] = await Promise.all([h.utilities(chatId), h.reportsOn(chatId)]);
+  await send(env, chatId, t(lang).typesTitle, { reply_markup: typesKeyboard(on, reportsOn, lang) });
 }
 
 async function showNow(env: Env, chatId: number, lang: Lang): Promise<void> {
@@ -272,15 +326,54 @@ async function onButton(env: Env, q: TgCallbackQuery): Promise<void> {
     return await showList(env, chatId, lang, msg.message_id);
   }
 
-  const tog = /^tog:(water|power|gas)$/.exec(data);
+  const tog = /^tog:(water|power|gas|reports)$/.exec(data);
   if (tog) {
-    const on = await hub(env).toggleUtility(chatId, tog[1] as Utility);
+    const h = hub(env);
+    if (tog[1] === "reports") await h.toggleReports(chatId);
+    else await h.toggleUtility(chatId, tog[1] as Utility);
+    const [on, reportsOn] = await Promise.all([h.utilities(chatId), h.reportsOn(chatId)]);
     await answer();
     await tg(env, "editMessageReplyMarkup", {
       chat_id: chatId,
       message_id: msg.message_id,
-      reply_markup: typesKeyboard(on, lang),
+      reply_markup: typesKeyboard(on, reportsOn, lang),
     }).catch(() => {});
+    return;
+  }
+
+  // /report: what, then where — one of the reporter's streets, or another.
+  const what = /^rep:(water|power|gas)$/.exec(data);
+  if (what) {
+    const u = what[1] as Reportable;
+    const streets = (await hub(env).subsOf(chatId)).filter((s) => s.kind === "street").slice(0, 8);
+    await answer();
+    if (streets.length === 0) return await askReportStreet(env, chatId, u, lang);
+    await tg(env, "editMessageText", {
+      chat_id: chatId,
+      message_id: msg.message_id,
+      text: `${t(lang).reportWhat[u]}\n${t(lang).reportWhere}`,
+      reply_markup: {
+        inline_keyboard: [
+          ...streets.map((s) => [{ text: `📍 ${s.label}`.slice(0, 60), callback_data: `repx:${u}:${s.id}` }]),
+          [{ text: t(lang).reportOtherStreet, callback_data: `repo:${u}` }],
+        ],
+      },
+    }).catch(() => {});
+    return;
+  }
+  const other = /^repo:(water|power|gas)$/.exec(data);
+  if (other) return void (await Promise.all([answer(), askReportStreet(env, chatId, other[1] as Reportable, lang)]));
+  const picked = /^repx:(water|power|gas):(\d+)$/.exec(data);
+  if (picked) {
+    const h = hub(env);
+    const sub = (await h.subsOf(chatId)).find((s) => s.id === Number(picked[2]));
+    await answer();
+    if (!sub) return;
+    const known = await h.knownCities();
+    // A street outside Tbilisi is labelled "Батуми, Руставели"; the report wants the street.
+    const street = splitCityStreet(sub.label, known).street;
+    const r = await h.reportOutage(chatOf(msg.chat), q.from.id, picked[1] as Reportable, street, cityNameOf(sub.city, known));
+    await tg(env, "editMessageText", { chat_id: chatId, message_id: msg.message_id, text: reportReply(r, lang), parse_mode: "HTML" }).catch(() => {});
     return;
   }
 
