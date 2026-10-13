@@ -94,7 +94,9 @@ function contentItem(i: ContentItem): Outage[] {
 
   // "...ელექტრომომარაგების არაგეგმური წყვეტა (ავარია)" — an unplanned cut.
   if (/არაგეგმ/.test(title)) {
-    const text = squash(htmlToText(html));
+    // Some notices repeat their own headline as the first paragraph.
+    let text = squash(htmlToText(html));
+    if (title && text.startsWith(title)) text = text.slice(title.length).replace(/^[\s.]+/, "");
     return [
       {
         ...base,

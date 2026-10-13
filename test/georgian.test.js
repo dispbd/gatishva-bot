@@ -76,3 +76,19 @@ test("transliteration follows Russian habits", () => {
   assert.equal(translitRu("ერეკლე"), "Эрекле");
   assert.equal(translitRu("თეიმურაზ"), "Теймураз");
 });
+
+test("house numbers after a comma stay with their street", () => {
+  // GWP, 8 October: "ბათუმის 25, 38, წერეთლის 6, 10, 12" came out as five places.
+  assert.deepEqual(splitAddresses("ბათუმის 25, 38, წერეთლის 6, 10, 12, იამანიძის ქ."), [
+    "ბათუმის 25, 38",
+    "წერეთლის 6, 10, 12",
+    "იამანიძის ქ", // the list's closing full stop goes
+  ]);
+  assert.deepEqual(splitAddresses("ტეხურის N31-39, N 41, ბაკურიანის"), ["ტეხურის N31-39, N 41", "ბაკურიანის"]);
+});
+
+test("a name that drops a vowel before its ending gets it back", () => {
+  assert.equal(addressRu("წერეთლის 6, 10, 12"), "Церетели 6, 10, 12");
+  assert.equal(addressRu("ვახტანგ გორგასლის ქ."), "ул. Вахтанг Горгасали");
+  assert.equal(addressRu("დავით აღმაშენებლის გამზ."), "пр. Давит Агмашенебели");
+});

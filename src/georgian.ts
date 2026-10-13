@@ -238,11 +238,26 @@ export function translitRu(text: string): string {
 }
 
 /**
+ * Names that drop a vowel before the case ending, so no suffix rule can put it
+ * back: წერეთელი → წერეთლის would otherwise read "Церетли". The common ones on
+ * Tbilisi's street signs.
+ */
+const SYNCOPE: Record<string, string> = {
+  "წერეთლის": "წერეთელი",
+  "გორგასლის": "გორგასალი",
+  "აღმაშენებლის": "აღმაშენებელი",
+  "მაჩაბლის": "მაჩაბელი",
+  "ბარნოვის": "ბარნოვი",
+  "ხეივნის": "ხეივანი",
+};
+
+/**
  * The nominative of a street name the texts give in the genitive or dative,
  * which is nearly always: "ჭავჭავაძის" is "of Chavchavadze". Only the common
  * endings are undone; anything else is left as written, which still reads.
  */
 export function toNominative(word: string): string {
+  if (SYNCOPE[word]) return SYNCOPE[word];
   if (/ძის$/.test(word)) return word.replace(/ძის$/, "ძე");
   if (/შვილი?ს$/.test(word)) return word.replace(/შვილი?ს$/, "შვილი");
   if (/შვილების$/.test(word)) return word.replace(/შვილების$/, "შვილი"); // ძმები ზუბალაშვილების
@@ -275,6 +290,7 @@ const TYPE_WORDS: { prefix: string; ru: string; lead?: boolean; exact?: boolean 
   { prefix: "sop", ru: "с.", lead: true, exact: true },
   { prefix: "s", ru: "с.", lead: true, exact: true }, // "ს." — also "village"
   { prefix: "heivan", ru: "аллея" },
+  { prefix: "heivn", ru: "аллея" }, // ხეივნის, without its vowel
   { prefix: "agmart", ru: "подъём" },
   { prefix: "dagmart", ru: "спуск" },
   { prefix: "moedan", ru: "пл.", lead: true },
@@ -347,14 +363,25 @@ export function splitAddresses(list: string): string[] {
     .replace(/\s+/g, " ")
     .split(/\s*[,;]\s*|\s+(?=და\s)/)
     .map((s) => s.replace(/^[\s.:–-]+|[\s.:–-]+$/g, "").trim())
-    .filter((s) => s.length > 1);
-  // "და" both ends a list and joins words inside an item: "ჭავჭავაძის
-  // შესახვევებით და ჩიხებით" is one place — its lanes and its dead ends.
+    .filter(Boolean);
   const out: string[] = [];
   for (const p of parts) {
     const rest = p.replace(/^და\s+/, "");
-    if (rest !== p && out.length && rest.split(" ").every((w) => typeWord(w))) out[out.length - 1] += ` ${p}`;
-    else out.push(rest);
+    const last = out.length - 1;
+    if (last >= 0 && HOUSE_NUMBERS.test(rest)) {
+      // "ბათუმის 25, 38": the commas also separate house numbers of one
+      // street, and "38" on its own is not an address.
+      out[last] += `, ${rest}`;
+    } else if (last >= 0 && rest !== p && rest.split(" ").every((w) => typeWord(w))) {
+      // "და" both ends a list and joins words inside an item: "ჭავჭავაძის
+      // შესახვევებით და ჩიხებით" is one place — its lanes and its dead ends.
+      out[last] += ` ${p}`;
+    } else {
+      out.push(rest);
+    }
   }
   return out.filter((s) => s.length > 1);
 }
+
+/** "38", "N 16", "12ა", "32-50": a house number or a range, with no street name. */
+const HOUSE_NUMBERS = /^(?:N|№)?\s*\d+[ა-ჿa-z]?(?:\s*-\s*\d+[ა-ჿa-z]?)?$/u;

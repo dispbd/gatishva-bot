@@ -111,3 +111,8 @@ test("district names come out of every case form the notices use", () => {
   assert.deepEqual(districtsOf("მთაწმინდა-კრწანისის რაიონის"), ["მთაწმინდა-კრწანისი"]);
   assert.deepEqual(districtsOf("შეზღუდვა შეეხება ქუჩებს"), []);
 });
+
+test("Telasi: a headline repeated as the first paragraph is not repeated in the text", () => {
+  const [o] = parseTelasi(fixture("telasi-5919.json"), NOW);
+  assert.match(o.text, /^გაცნობებთ/);
+});
