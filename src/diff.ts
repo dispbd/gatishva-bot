@@ -23,11 +23,29 @@ export const NEWS_WINDOW_SEC = 3 * 3600;
  * notice is fresh, and the lights may well still be off.
  */
 export function isCurrent(o: Outage, now: number, live: boolean): boolean {
-  if (live) return true;
-  if (o.end !== undefined && o.end > now) return true;
-  if (o.publishedAt !== undefined && o.publishedAt > now - NEWS_WINDOW_SEC) return true;
-  if (o.end === undefined && o.start !== undefined) return o.start > now - NEWS_WINDOW_SEC;
-  return false;
+  return currentUntil(o, live) > now;
+}
+
+/** "Current until the provider says otherwise": what a live list's items get. */
+export const UNTIL_FINISHED = Number.MAX_SAFE_INTEGER;
+
+/**
+ * The moment an outage stops being current, by the rules isCurrent states —
+ * stored with each outage and indexed, so that "what is going on now" is a
+ * range query instead of parsing every notice the archives ever held.
+ *
+ * Current means any of: on a live list; not yet at its end; published within
+ * the news window; or, with no end at all, started within it. So it is current
+ * until the latest of those moments; 0 when none applies.
+ */
+export function currentUntil(o: Outage, live: boolean): number {
+  if (live) return UNTIL_FINISHED;
+  return Math.max(
+    0,
+    o.end ?? 0,
+    o.publishedAt !== undefined ? o.publishedAt + NEWS_WINDOW_SEC : 0,
+    o.end === undefined && o.start !== undefined ? o.start + NEWS_WINDOW_SEC : 0,
+  );
 }
 
 /**

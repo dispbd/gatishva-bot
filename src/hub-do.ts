@@ -16,7 +16,7 @@ import { SOURCES, sourceByName } from "./sources/index.ts";
 import { matchOutage, streetSub, citySub, learnedDistrict, DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
-import { fingerprint, isCurrent, sha256, median, MISSES_TO_FINISH } from "./diff.ts";
+import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH } from "./diff.ts";
 import { findKeys, translit } from "./georgian.ts";
 import { tg, describe, isChatGone, isNotModified, TelegramError, escapeHtml } from "./telegram.ts";
 import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts";
@@ -127,6 +127,21 @@ export class Hub extends DurableObject<Env> {
     const chatColumns = this.rows<{ name: string }>(`PRAGMA table_info(chats)`).map((c) => c.name);
     if (!chatColumns.includes("lang")) this.sql.exec(`ALTER TABLE chats ADD COLUMN lang TEXT`);
     const columns = this.rows<{ name: string }>(`PRAGMA table_info(events)`).map((c) => c.name);
+    if (!columns.includes("current_until")) {
+      // When each outage stops being current (see currentUntil), so that /now
+      // reads what is going on instead of parsing every notice the archives
+      // ever held — the CMS sources never mark anything finished. Filled in
+      // once for the rows from before the column.
+      this.sql.exec(`ALTER TABLE events ADD COLUMN current_until INTEGER NOT NULL DEFAULT 0`);
+      for (const ev of this.rows<{ key: string; source: string; data: string }>(`SELECT key, source, data FROM events`)) {
+        const live = sourceByName(ev.source)?.live(ev.key) ?? false;
+        this.sql.exec(
+          `UPDATE events SET current_until = ? WHERE key = ?`,
+          currentUntil(JSON.parse(ev.data) as Outage, live), ev.key,
+        );
+      }
+    }
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS events_current ON events (current_until)`);
     if (!columns.includes("first_read")) {
       this.sql.exec(`ALTER TABLE events ADD COLUMN first_read INTEGER NOT NULL DEFAULT 0`);
       // Rows from before the column existed: a first read stamps a whole batch
@@ -309,9 +324,10 @@ export class Hub extends DurableObject<Env> {
       const prev = this.rows<EventRow>(`SELECT * FROM events WHERE key = ?`, o.key)[0];
       if (!prev) {
         this.sql.exec(
-          `INSERT INTO events (key, source, city, fp, data, first_seen, last_seen, published_at, first_read)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO events (key, source, city, fp, data, first_seen, last_seen, published_at, first_read, current_until)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           o.key, source.name, o.city, fp, JSON.stringify(o), now, now, o.publishedAt ?? null, firstRead ? 1 : 0,
+          currentUntil(o, source.live(o.key)),
         );
         // Even an archive teaches where streets are, so this runs on a first read too.
         this.learnDistricts(o, subs);
@@ -321,7 +337,10 @@ export class Hub extends DurableObject<Env> {
       // Back on a live list after being called over: it is not over after all.
       this.sql.exec(`UPDATE events SET last_seen = ?, missing = 0, finished_at = NULL WHERE key = ?`, now, o.key);
       if (prev.fp === fp && prev.finished_at === null) continue;
-      this.sql.exec(`UPDATE events SET fp = ?, data = ? WHERE key = ?`, fp, JSON.stringify(o), o.key);
+      this.sql.exec(
+        `UPDATE events SET fp = ?, data = ?, current_until = ? WHERE key = ?`,
+        fp, JSON.stringify(o), currentUntil(o, source.live(o.key)), o.key,
+      );
       this.learnDistricts(o, subs);
       for (const s of this.rows<{ chat_id: number }>(`SELECT chat_id FROM sent WHERE key = ?`, o.key)) {
         this.enqueue(s.chat_id, o.key, "edit");
@@ -689,10 +708,13 @@ export class Hub extends DurableObject<Env> {
     if (subs.length === 0) return 0;
     const utilitiesOf = this.utilitiesLookup();
     let n = 0;
-    for (const ev of this.rows<EventRow>(`SELECT * FROM events WHERE finished_at IS NULL ORDER BY first_seen`)) {
+    // Only what is current, by the index: a few dozen rows out of the
+    // thousands the archives accumulate over a month.
+    const rows = this.rows<EventRow>(
+      `SELECT * FROM events WHERE current_until > ? AND finished_at IS NULL ORDER BY first_seen`, now,
+    );
+    for (const ev of rows) {
       const o = JSON.parse(ev.data) as Outage;
-      const source = sourceByName(ev.source);
-      if (!source || !isCurrent(o, now, source.live(o.key))) continue;
       if (!matchOutage(o, subs, utilitiesOf).has(chatId)) continue;
       this.enqueue(chatId, o.key, "repeat");
       if (++n >= 15) break;
