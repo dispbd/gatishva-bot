@@ -26,8 +26,13 @@ import type { RelayResult } from "./gwp-relay-do.ts";
 import { t, isLang } from "./i18n.ts";
 import type { Lang } from "./i18n.ts";
 
-/** Telegram calls per alarm run: the free plan allows 50 subrequests, polls take the rest. */
-const SENDS_PER_RUN = 30;
+/**
+ * Messages per alarm run. Rendering one costs 2-3 ms of CPU, and the free plan
+ * gives a run 10: a run of 30 measured 43 ms. Five keep a run inside the
+ * budget; the alarm re-arms a second later while the outbox has more, so
+ * fifteen messages take three seconds instead of one.
+ */
+const SENDS_PER_RUN = 5;
 /** A source failing this many times in a row is worth a message to the operator. */
 const ALERT_AFTER_FAILURES = 10;
 /** Forget outages nobody has seen for this long. */

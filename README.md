@@ -81,7 +81,7 @@ cron */5 ──► ensureAlarm ─┐
              ┌──────── Hub (Durable Object, SQLite) ────────┐
  alarm ────► │ poll due sources → hash → parse → diff        │
              │   new / changed / vanished → outbox           │
-             │ drain outbox (≤30 Telegram calls per run)     │──► Telegram
+             │ drain outbox (≤5 messages per run)            │──► Telegram
              │ re-arm: next source due, or +1 s if outbox    │
              └───────────────────────────────────────────────┘
 Telegram webhook ──► Worker /tg ──► bot.ts ──► Hub RPC (subscribe, list, …)
@@ -120,8 +120,8 @@ Telegram webhook ──► Worker /tg ──► bot.ts ──► Hub RPC (subscr
 | Лимит | Free | Расход |
 |---|---|---|
 | Запросов к Worker/DO в сутки | 100 000 | ~3 000 будильников + вебхуки |
-| Подзапросов за один запуск | 50 | ≤ 10 на опрос + ≤ 30 на отправку |
-| CPU на запуск | 10 мс | разбор изменившегося ответа ≤ 5 мс, неизменившегося ~0 |
+| Подзапросов за один запуск | 50 | ≤ 10 на опрос + ≤ 5 на отправку |
+| CPU на запуск | 10 мс | разбор изменившегося ответа ≤ 5 мс, неизменившегося ~0; сообщение 2–3 мс, поэтому по 5 за запуск |
 | Cron-триггеров | 5 на аккаунт | 1 |
 
 Telasi по умолчанию отдаёт 30 заметок (~250 КБ, ~7 мс разбора) — запрашиваются 8 (`perPage`).
