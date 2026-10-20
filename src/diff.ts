@@ -13,7 +13,9 @@ export function fingerprint(o: Outage): string {
   // must reach the chats that have it. Appended only for signals, so every
   // provider outage keeps the fingerprint it was stored with.
   const r = o.reports;
-  return JSON.stringify(r ? [...base, r.count, r.confirmedBy ?? null] : base);
+  if (r) return JSON.stringify([...base, r.count, r.confirmedBy ?? null]);
+  // Likewise a cut of the whole municipality, which reaches more people.
+  return JSON.stringify(o.wholeCity ? [...base, "whole"] : base);
 }
 
 /** How long after publication an outage with no end time still counts as news. */

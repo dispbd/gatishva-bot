@@ -11,6 +11,7 @@
 // polls every five minutes; its source code is public (andreev-e/water_ge).
 import { fetchText, postJson, retrying, htmlToText, squash, looksEmergency } from "./common.ts";
 import { splitAddresses } from "../georgian.ts";
+import { KNOWN_CITIES, cityOfGenitive } from "../cities.ts";
 import { parseLocal, tbilisiDate } from "../time.ts";
 import type { Outage, SourceDef } from "../types.ts";
 
@@ -104,11 +105,9 @@ export function parseSocar(raw: string): Outage[] {
   return data.items
     .filter((g) => !g.isDeactivated)
     .map((g) => {
-      // "სიღნაღი: სოფ. ნუკრიანი" — the municipality, then the places.
       const title = squash(g.title ?? "");
-      const colon = title.indexOf(":");
-      const city = colon > 0 ? title.slice(0, colon).trim() : title;
-      const places = colon > 0 ? title.slice(colon + 1) : "";
+      const description = g.detail?.notificationDescription ?? g.description ?? "";
+      const { city, places, whole } = socarPlace(title, description);
       const iso = (s?: string) => (s ? Math.floor(Date.parse(s) / 1000) || undefined : undefined);
       return {
         key: `socar:${g.id}`,
@@ -121,11 +120,51 @@ export function parseSocar(raw: string): Outage[] {
         end: iso(g.end),
         publishedAt: iso(g.created),
         title,
-        text: squash(`${title}. ${g.detail?.notificationDescription ?? g.description ?? ""}`),
+        text: squash(`${title}. ${description}`),
+        ...(whole ? { wholeCity: true } : {}),
         addresses: splitAddresses(places),
         url: "https://www.mygas.ge/",
       } satisfies Outage;
     });
+}
+
+/**
+ * The municipality and the places of a SOCAR title. Most read "სიღნაღი: სოფ.
+ * ნუკრიანი", but a third (October 2026) do without the colon or the
+ * municipality: "ჭიათურა ბათუმის ქუჩა", "ქუთაისი- თამარ მეფის 10-12",
+ * "გურჯაანი; სოფ. კაჭრეთი", "დაბა ჩაქვი. ხუსეინ ბეჟანიძის ქუჩა". The notice's
+ * own text always says "…ის მუნიციპალიტეტში", which settles the last kind.
+ */
+export function socarPlace(title: string, description: string): { city: string; places: string; whole: boolean } {
+  // "ჭიათურა", or "ადიგენის მუნიციპალიტეტი", then a separator, then places.
+  const head = /^([ა-ჿ]+)(\s+მუნიციპალიტეტი)?(?:\s*[:;.,\-–]\s*|\s+|$)/.exec(title);
+  const named = head && (head[2] ? cityOfGenitive(head[1]!) : KNOWN_CITIES.find((c) => c === head[1]));
+  const inText = /([ა-ჿ]+)\s+მუნიციპალიტეტ/.exec(description);
+  const fromText = inText ? cityOfGenitive(inText[1]!) : undefined;
+  let city: string;
+  let rest: string;
+  if (named) {
+    city = named;
+    rest = title.slice(head![0].length);
+  } else if (fromText) {
+    city = fromText;
+    rest = title;
+  } else {
+    // Neither: as before, whatever stands before the colon.
+    const colon = title.indexOf(":");
+    city = colon > 0 ? title.slice(0, colon).trim() : title;
+    rest = colon > 0 ? title.slice(colon + 1) : "";
+  }
+  rest = rest.trim();
+  const whole = /^(?:სრულად|მთლიანად)\.?$/.test(rest);
+  const places = whole
+    ? ""
+    : rest
+        .replace(/^სოფლები\s*[-–:]\s*/, "") // "სოფლები - სარო, ხიზაბავრა": villages: …
+        .replace(/\s*;\s*/g, ", ")
+        .replace(/\s+:\s+/g, ", ") // "დაბა კოჯორი : ექვთიმე თაყაიშვილის ქუჩა"
+        .replace(/[.\s]+$/, "");
+  return { city, places, whole };
 }
 
 export const socar: SourceDef = {
