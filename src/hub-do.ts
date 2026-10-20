@@ -14,7 +14,10 @@
 import { DurableObject } from "cloudflare:workers";
 import { SOURCES, sourceByName } from "./sources/index.ts";
 import { matchOutage, cityParts, streetSub, citySub, roadSub, placeSub, storedKeys, fromStoredKeys, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
-import { settlementsOf, placeKey, parsePlace, KNOWN_SETTLEMENTS } from "./places.ts";
+import { settlementsOf, placeKey, KNOWN_SETTLEMENTS } from "./places.ts";
+import type { PlaceQuery } from "./places.ts";
+import { readings, candidates, needsChoice } from "./candidates.ts";
+import type { Candidate } from "./candidates.ts";
 import type { Settlement } from "./places.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
@@ -41,6 +44,8 @@ import type { Lang } from "./i18n.ts";
  * fifteen messages take three seconds instead of one.
  */
 const SENDS_PER_RUN = 5;
+/** How long the buttons of an address choice keep working. */
+const PENDING_SEC = 86400;
 /** A source failing this many times in a row is worth a message to the operator. */
 const ALERT_AFTER_FAILURES = 10;
 /** Forget outages nobody has seen for this long. */
@@ -115,6 +120,22 @@ export interface AddResult {
   place?: string;
 }
 
+/**
+ * What /add did with a typed address: subscribed to the one reading the
+ * notices support, or asks which of several (see src/candidates.ts). Either
+ * way `pending` names the readings, for "✏️ Not this one" and the buttons.
+ */
+export type PlaceOutcome =
+  | { status: "added"; result: AddResult; pending: number; alternatives: number }
+  | { status: "choose"; pending: number; candidates: Candidate[] };
+
+interface Pending {
+  text: string;
+  candidates: Candidate[];
+  /** The subscription made from it so far, replaced by another pick. */
+  subId?: number;
+}
+
 export class Hub extends DurableObject<Env> {
   private sql: SqlStorage;
 
@@ -156,6 +177,8 @@ export class Hub extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS settlements (
         key TEXT NOT NULL, name TEXT NOT NULL, city TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0,
         last_seen INTEGER, PRIMARY KEY (key, city));
+      CREATE TABLE IF NOT EXISTS pending (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, created INTEGER NOT NULL, data TEXT NOT NULL);
     `);
     // Added after launch. `first_read` marks what a source already held when the
     // bot first read it: an archive, "seen" only because the bot was switched on,
@@ -812,6 +835,7 @@ export class Hub extends DurableObject<Env> {
     this.sql.exec(`DELETE FROM events WHERE last_seen < ?`, cutoff);
     this.sql.exec(`DELETE FROM reports WHERE created < ?`, now - 2 * 86400);
     this.sql.exec(`DELETE FROM settlements WHERE last_seen < ?`, now - 180 * 86400);
+    this.sql.exec(`DELETE FROM pending WHERE created < ?`, now - PENDING_SEC);
     this.sql.exec(`INSERT OR REPLACE INTO meta (k, v) VALUES ('gc', ?)`, String(now));
   }
 
@@ -914,12 +938,71 @@ export class Hub extends DurableObject<Env> {
    * A subscription from what the subscriber typed: "Руставели", "Батуми,
    * Руставели", "Бакуриани, Гоголадзе", "Ноджихеви" (see src/places.ts).
    */
-  async addPlace(chat: ChatInfo, text: string): Promise<AddResult> {
-    const q = parsePlace(
+  async addPlace(chat: ChatInfo, text: string): Promise<PlaceOutcome> {
+    const qs = readings(
       text, this.knownCities(), (w) => this.settlementsNamed(w), (w) => this.tbilisiStreet(w), DEFAULT_CITY,
     );
+    const events = this.rows<{ data: string }>(`SELECT data FROM events`).map((r) => JSON.parse(r.data) as Outage);
+    const list = candidates(qs, events, DEFAULT_CITY);
+    this.touchChat(chat);
+    this.sql.exec(
+      `INSERT INTO pending (chat_id, created, data) VALUES (?, ?, ?)`,
+      chat.id, nowSec(), JSON.stringify({ text, candidates: list } satisfies Pending),
+    );
+    const pending = this.rows<{ id: number }>(`SELECT last_insert_rowid() AS id`)[0]!.id;
+    if (needsChoice(list)) return { status: "choose", pending, candidates: list };
+    // A district read off a single notice is not pinned unasked; the
+    // subscription learns its districts from the notices as it always has.
+    const only = list[0];
+    const result = await this.subscribe(chat, only ? (only.inferred ? { ...only, district: undefined } : only) : qs[0]!);
+    this.setPending(pending, { text, candidates: list, subId: result.sub?.id });
+    return { status: "added", result, pending, alternatives: Math.max(0, list.length - 1) };
+  }
+
+  /**
+   * A button of an address choice: `index` into its readings, or "all" for
+   * the street without a district pinned. Replaces whatever the same choice
+   * subscribed before. Undefined once the choice has expired.
+   */
+  async pick(chat: ChatInfo, pending: number, index: number | "all"): Promise<AddResult | undefined> {
+    const p = this.pendingOf(chat.id, pending);
+    if (!p) return undefined;
+    const chosen = index === "all" ? p.candidates[0] : p.candidates[index];
+    if (!chosen) return undefined;
+    if (p.subId) this.removeSub(chat.id, p.subId);
+    const q: PlaceQuery = index === "all" ? { ...chosen, district: undefined } : chosen;
+    const result = await this.subscribe(chat, q);
+    this.setPending(pending, { ...p, subId: result.sub?.id });
+    return result;
+  }
+
+  /** "✏️ Not this one": the subscription goes, and the readings come back. */
+  notThis(chatId: number, pending: number): { text: string; candidates: Candidate[] } | undefined {
+    const p = this.pendingOf(chatId, pending);
+    if (!p) return undefined;
+    if (p.subId) this.removeSub(chatId, p.subId);
+    this.setPending(pending, { text: p.text, candidates: p.candidates });
+    return { text: p.text, candidates: p.candidates };
+  }
+
+  private pendingOf(chatId: number, id: number): Pending | undefined {
+    const row = this.rows<{ data: string }>(
+      `SELECT data FROM pending WHERE id = ? AND chat_id = ? AND created > ?`, id, chatId, nowSec() - PENDING_SEC,
+    )[0];
+    return row ? (JSON.parse(row.data) as Pending) : undefined;
+  }
+
+  private setPending(id: number, p: Pending): void {
+    this.sql.exec(`UPDATE pending SET data = ? WHERE id = ?`, JSON.stringify(p), id);
+  }
+
+  /** Subscribe to one reading of an address. */
+  private async subscribe(chat: ChatInfo, q: PlaceQuery): Promise<AddResult> {
     if (!q.place) {
-      if (!q.street) return { ok: false, error: "too_short", current: 0, examples: [], districts: [] };
+      // "Казбеги" picked as the municipality: the whole city.
+      if (!q.street) return q.city === DEFAULT_CITY
+        ? { ok: false, error: "too_short", current: 0, examples: [], districts: [] }
+        : { ...(await this.addCity(chat, q.city)), city: q.city };
       return { ...(await this.addStreet(chat, q.street, q.city, q.district)), city: q.city };
     }
     const lang = this.langOf(chat.id);

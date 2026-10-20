@@ -109,6 +109,15 @@ export interface Strings {
   followingStreet: (label: string, city: string) => string;
   seenAs: (list: string) => string;
   notSeenYet: string;
+  /** A typed address the notices read more than one way. */
+  chooseTitle: (typed: string) => string;
+  chooseHint: string;
+  chooseAll: string;
+  chooseCity: (city: string) => string;
+  chooseOther: string;
+  notThis: string;
+  choiceExpired: string;
+  retype: string;
   districtKnown: (districts: string) => string;
   districtUnknown: (label: string) => string;
   currentNow: (n: number) => string;
@@ -227,6 +236,14 @@ const ru: Strings = {
   followingStreet: (l, c) => `✅ Подписка: <b>${l}</b> (${c}).`,
   seenAs: (list) => `Уже встречалась в отключениях как: ${list}.`,
   notSeenYet: "В недавних отключениях её не было — пришлю, как только появится.",
+  chooseTitle: (t) => `«${t}» может означать разные места. Какое ваше?`,
+  chooseHint: "Число — сколько раз адрес встречался в отключениях за месяц.",
+  chooseAll: "Все эти",
+  chooseCity: (c) => `🏙 ${c} — весь город`,
+  chooseOther: "✏️ Другое — напишу точнее",
+  notThis: "✏️ Не то",
+  choiceExpired: "Этот выбор устарел — отправьте адрес ещё раз: /add",
+  retype: "Подписку убрал. Напишите адрес точнее — например, с городом или районом.",
   districtKnown: (d) => `Район: ${d} — аварии на весь район тоже придут.`,
   districtUnknown: (l) => `Район улицы пока не знаю, и аварию на весь район не пришлю. Укажите его: /add ${l}, Мтацминда`,
   currentNow: (n) => `Сейчас по ней ${n} ${ruPlural(n, "отключение", "отключения", "отключений")} — присылаю.`,
@@ -342,6 +359,14 @@ Sources: GWP (water, Tbilisi), Telasi (power, Tbilisi), Tbilisi Energy (gas, Tbi
   followingStreet: (l, c) => `✅ Following: <b>${l}</b> (${c}).`,
   seenAs: (list) => `Seen in outages before as: ${list}.`,
   notSeenYet: "Not in any recent outage — I'll send it as soon as it turns up.",
+  chooseTitle: (t) => `“${t}” can mean several places. Which one is yours?`,
+  chooseHint: "The number is how many outages named it this month.",
+  chooseAll: "All of these",
+  chooseCity: (c) => `🏙 ${c} — the whole city`,
+  chooseOther: "✏️ Something else — I'll be more precise",
+  notThis: "✏️ Not this one",
+  choiceExpired: "This choice has expired — send the address again: /add",
+  retype: "Removed. Write the address more precisely — with the city or the district, say.",
   districtKnown: (d) => `District: ${d} — outages of the whole district will reach you too.`,
   districtUnknown: (l) =>
     `I don't know the street's district yet, so an outage of the whole district would miss it. Name it: /add ${l}, Mtatsminda`,
@@ -458,6 +483,14 @@ const ka: Strings = {
   followingStreet: (l, c) => `✅ გამოწერილია: <b>${l}</b> (${c}).`,
   seenAs: (list) => `გათიშვებში უკვე შეგვხვედრია ასე: ${list}.`,
   notSeenYet: "ბოლო გათიშვებში არ ყოფილა — გამოგიგზავნით, როგორც კი გამოჩნდება.",
+  chooseTitle: (t) => `„${t}“ რამდენიმე ადგილს შეიძლება ნიშნავდეს. რომელია თქვენი?`,
+  chooseHint: "რიცხვი — რამდენჯერ ჩანდა ეს მისამართი ბოლო თვის გათიშვებში.",
+  chooseAll: "ყველა",
+  chooseCity: (c) => `🏙 ${c} — მთელი ქალაქი`,
+  chooseOther: "✏️ სხვა — დავაზუსტებ",
+  notThis: "✏️ ეს არ არის",
+  choiceExpired: "ეს არჩევანი მოძველდა — გამოგზავნეთ მისამართი თავიდან: /add",
+  retype: "გამოწერა მოვხსენი. დაწერეთ მისამართი უფრო ზუსტად — მაგალითად, ქალაქით ან რაიონით.",
   districtKnown: (d) => `რაიონი: ${d} — მთელი რაიონის გათიშვებიც მოგივათ.`,
   districtUnknown: (l) =>
     `ქუჩის რაიონი ჯერ არ ვიცი, ამიტომ მთელი რაიონის გათიშვა ვერ მოგივათ. მიუთითეთ: /add ${l}, მთაწმინდა`,
