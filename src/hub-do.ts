@@ -14,7 +14,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { SOURCES, sourceByName } from "./sources/index.ts";
 import { matchOutage, cityParts, streetSub, citySub, roadSub, placeSub, storedKeys, fromStoredKeys, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
-import { settlementsOf, placeKey, KNOWN_SETTLEMENTS } from "./places.ts";
+import { settlementsOf, placeKey, fromFullAddress, KNOWN_SETTLEMENTS } from "./places.ts";
 import type { PlaceQuery } from "./places.ts";
 import { readings, candidates, needsChoice } from "./candidates.ts";
 import type { Candidate } from "./candidates.ts";
@@ -939,11 +939,26 @@ export class Hub extends DurableObject<Env> {
    * Руставели", "Бакуриани, Гоголадзе", "Ноджихеви" (see src/places.ts).
    */
   async addPlace(chat: ChatInfo, text: string): Promise<PlaceOutcome> {
-    const qs = readings(
-      text, this.knownCities(), (w) => this.settlementsNamed(w), (w) => this.tbilisiStreet(w), DEFAULT_CITY,
-    );
-    const events = this.rows<{ data: string }>(`SELECT data FROM events`).map((r) => JSON.parse(r.data) as Outage);
-    const list = candidates(qs, events, DEFAULT_CITY);
+    const known = this.knownCities();
+    const settlementsNamed = (w: string) => this.settlementsNamed(w);
+    // "Ilia Chavchavadze Ave 37, Tbilisi 0179, Georgia", pasted from a map.
+    const typed = fromFullAddress(text, known, (w) => settlementsNamed(w).length > 0) ?? text;
+    const qs = readings(typed, known, settlementsNamed, (w) => this.tbilisiStreet(w), DEFAULT_CITY);
+    return await this.offer(chat, text, qs, false);
+  }
+
+  /**
+   * A subscription from a point on a map, already read by the geocoder: its
+   * district is the point's own, so it is pinned, and there is nothing to ask.
+   */
+  async addReading(chat: ChatInfo, label: string, q: PlaceQuery): Promise<PlaceOutcome> {
+    return await this.offer(chat, label, [q], true);
+  }
+
+  /** Subscribe to the one reading the notices support, or ask which of several. */
+  private async offer(chat: ChatInfo, text: string, qs: PlaceQuery[], pinned: boolean): Promise<PlaceOutcome> {
+    const events = () => this.rows<{ data: string }>(`SELECT data FROM events`).map((r) => JSON.parse(r.data) as Outage);
+    const list: Candidate[] = pinned ? qs.map((q) => ({ ...q, count: 0 })) : candidates(qs, events(), DEFAULT_CITY);
     this.touchChat(chat);
     this.sql.exec(
       `INSERT INTO pending (chat_id, created, data) VALUES (?, ?, ?)`,

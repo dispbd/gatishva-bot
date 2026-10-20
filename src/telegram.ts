@@ -26,6 +26,10 @@ export interface TgMessage {
   sender_chat?: TgChat;
   chat: TgChat;
   text?: string;
+  /** A point shared from the attachment menu or the "send location" button. */
+  location?: { latitude: number; longitude: number; live_period?: number };
+  /** A place picked from the map, with the point it stands on. */
+  venue?: { location: { latitude: number; longitude: number }; title?: string; address?: string };
   /**
    * The message this one replies to. In a group with privacy mode on, a reply to
    * the bot's own message is one of the few things Telegram delivers at all —

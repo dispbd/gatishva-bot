@@ -9,7 +9,9 @@
 // Everything is said in the chat's language (see src/i18n.ts), which every
 // update looks up first: a new chat takes its first user's Telegram language.
 import { hub } from "./hub-do.ts";
-import type { ChatInfo, AddResult, ReportResult } from "./hub-do.ts";
+import type { ChatInfo, AddResult, ReportResult, PlaceOutcome } from "./hub-do.ts";
+import { reverseGeocode, placeOfAddress, findMapLink, pointOfLink } from "./geo.ts";
+import type { Point } from "./geo.ts";
 import { isWholeCity } from "./candidates.ts";
 import type { Candidate } from "./candidates.ts";
 import { tg, describe, escapeHtml } from "./telegram.ts";
@@ -63,7 +65,48 @@ export async function handleUpdate(env: Env, update: TgUpdate): Promise<void> {
   // Telegram tells the old group first; acting on it moves the subscriptions
   // before any outage has to be sent there and bounce.
   if (m?.migrate_to_chat_id) return await hub(env).migrateChat(m.chat.id, m.migrate_to_chat_id);
+  if (m?.location || m?.venue) return await onPoint(env, m);
   if (m?.text) await onText(env, m);
+}
+
+/** Whether a message answers the bot's "type a street" prompt, in any language. */
+function answersStreetPrompt(env: Env, m: TgMessage): boolean {
+  const prompt = m.reply_to_message;
+  return prompt?.from?.id === botId(env) && !!prompt.text &&
+    inEveryLang((s) => s.promptStreet).some((p) => prompt.text!.startsWith(p));
+}
+
+/**
+ * A location or a place from the map. In a private chat any point is an
+ * address to follow; in a group only one sent as the answer to the street
+ * prompt — the only kind Telegram delivers there anyway, privacy mode on.
+ */
+async function onPoint(env: Env, m: TgMessage): Promise<void> {
+  if (m.chat.type !== "private" && !answersStreetPrompt(env, m)) return;
+  const lang = await hub(env).chatLang(chatOf(m.chat), langFromTelegram(m.from?.language_code));
+  if (!(await mayEdit(env, m))) return await send(env, m.chat.id, t(lang).notAdmin);
+  const at = m.venue?.location ?? m.location!;
+  await followPoint(env, m, { lat: at.latitude, lon: at.longitude }, lang);
+}
+
+/** Subscribe to the street at a point, read by the geocoder (src/geo.ts). */
+async function followPoint(env: Env, m: TgMessage, p: Point, lang: Lang): Promise<void> {
+  const S = t(lang);
+  let address;
+  try {
+    address = await reverseGeocode(p);
+  } catch (e) {
+    console.warn(`reverse geocoding failed: ${describe(e)}`);
+    return await send(env, m.chat.id, S.geoFailed);
+  }
+  const q = address && placeOfAddress(address);
+  if (q === "outside") return await send(env, m.chat.id, S.locationOutside);
+  if (!q) return await send(env, m.chat.id, S.locationUnknown);
+  // The street as the chat reads it: "пр. Илия Чавчавадзе", or Georgian as published.
+  const street = q.street && (lang === "ka" ? q.street : addressLocal(q.street, lang));
+  const label = [q.place && translit(q.place, lang), street].filter(Boolean).join(", ");
+  const out = await hub(env).addReading(chatOf(m.chat), label, { ...q, ...(street ? { street } : {}) });
+  await replyOutcome(env, m.chat.id, label, out, lang);
 }
 
 function menu(lang: Lang): Record<string, unknown> {
@@ -141,8 +184,20 @@ function askerMention(lang: Lang, from?: TgUser): string {
 
 async function askStreet(env: Env, chatId: number, lang: Lang, from?: TgUser): Promise<void> {
   const S = t(lang);
-  await send(env, chatId, `${S.promptStreet}${askerMention(lang, from)}\n${S.promptStreetHint}`, {
-    reply_markup: { force_reply: true, selective: true, input_field_placeholder: S.streetExample },
+  const text = `${S.promptStreet}${askerMention(lang, from)}\n${S.promptStreetHint}\n${S.locationHint}`;
+  // A private chat reads any message as an address, so it can offer the
+  // location button instead of a forced reply; Telegram only allows that
+  // button there. A group answers the prompt, location attached or typed.
+  const privateChat = chatId > 0;
+  await send(env, chatId, text, {
+    reply_markup: privateChat
+      ? {
+          keyboard: [[{ text: S.sendLocation, request_location: true }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+          input_field_placeholder: S.streetExample,
+        }
+      : { force_reply: true, selective: true, input_field_placeholder: S.streetExample },
   });
 }
 
@@ -155,14 +210,29 @@ async function askCity(env: Env, chatId: number, lang: Lang, from?: TgUser): Pro
 
 async function addStreet(env: Env, m: TgMessage, text: string, lang: Lang): Promise<void> {
   if (!(await mayEdit(env, m))) return await send(env, m.chat.id, t(lang).notAdmin);
+  // A link from a maps app: its point, not its words.
+  const link = findMapLink(text);
+  if (link) {
+    let p: Point | undefined;
+    try {
+      p = await pointOfLink(link);
+    } catch (e) {
+      console.warn(`maps link not followed: ${describe(e)}`);
+    }
+    return p ? await followPoint(env, m, p, lang) : await send(env, m.chat.id, t(lang).linkUnreadable);
+  }
   // The Hub reads the place — city, village, street, district — and either
   // subscribes or, when the notices read it several ways, asks which.
-  const out = await hub(env).addPlace(chatOf(m.chat), text);
+  await replyOutcome(env, m.chat.id, text, await hub(env).addPlace(chatOf(m.chat), text), lang);
+}
+
+/** The question with its buttons, or the confirmation with "✏️ Не то". */
+async function replyOutcome(env: Env, chatId: number, typed: string, out: PlaceOutcome, lang: Lang): Promise<void> {
   if (out.status === "choose") {
-    return await send(env, m.chat.id, chooseText(text, lang), { reply_markup: chooseKeyboard(out.pending, out.candidates, lang) });
+    return await send(env, chatId, chooseText(typed, lang), { reply_markup: chooseKeyboard(out.pending, out.candidates, lang) });
   }
   const r = out.result;
-  await send(env, m.chat.id, confirmation(r, r.city ?? DEFAULT_CITY, lang), r.ok ? notThisKeyboard(out.pending, lang) : {});
+  await send(env, chatId, confirmation(r, r.city ?? DEFAULT_CITY, lang), r.ok ? notThisKeyboard(out.pending, lang) : {});
 }
 
 // --- confirming an address (see src/candidates.ts) ----------------------------
