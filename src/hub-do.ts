@@ -18,6 +18,7 @@ import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
 import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH, UNTIL_FINISHED } from "./diff.ts";
 import { findKeys, translit } from "./georgian.ts";
+import { moveChat } from "./chat-move.ts";
 import { tg, describe, isChatGone, isNotModified, TelegramError, escapeHtml } from "./telegram.ts";
 import { nowSec, fmtDuration, fmtDateTime, TBILISI_OFFSET_SEC } from "./time.ts";
 import { UTILITIES, wanted } from "./types.ts";
@@ -573,6 +574,11 @@ export class Hub extends DurableObject<Env> {
         if (e instanceof TelegramError && e.retryAfter) {
           return nowSec() + e.retryAfter;
         }
+        if (e instanceof TelegramError && e.migrateTo) {
+          // The group became a supergroup; the job is retried under its new id.
+          this.migrateChat(job.chat_id, e.migrateTo);
+          continue;
+        }
         if (isChatGone(e)) {
           console.log(`chat ${job.chat_id} is gone (${describe(e)}); dropping it`);
           this.forgetChat(job.chat_id);
@@ -695,6 +701,13 @@ export class Hub extends DurableObject<Env> {
       const done = o.utility === "weather" ? S.warningLiftedReply(icon, o.provider) : S.finishedReply(icon, o.provider);
       await commentOnPost(cfg, post, toPlain(done));
     }
+  }
+
+  /** A group became a supergroup: it keeps what it had under the new id. */
+  migrateChat(from: number, to: number): void {
+    if (from === to) return;
+    moveChat((query, ...binds) => this.sql.exec(query, ...binds), from, to);
+    console.log(`chat ${from} became supergroup ${to}; its subscriptions moved`);
   }
 
   private forgetChat(chatId: number): void {
