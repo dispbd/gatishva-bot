@@ -116,3 +116,19 @@ test("Telasi: a headline repeated as the first paragraph is not repeated in the 
   const [o] = parseTelasi(fixture("telasi-5919.json"), NOW);
   assert.match(o.text, /^გაცნობებთ/);
 });
+
+// The live list as it was on 2026-10-20: the text is the bare street list.
+const live = parseTelasi(fixture("telasi-live.json"), NOW);
+
+test("Telasi live: the bare street list is the address list", () => {
+  const rustaveli = live.find((o) => o.key === "telasi-live:GIS99147");
+  assert.equal(rustaveli.addresses.length, 8);
+  assert.ok(rustaveli.addresses.includes("რუსთაველის გამზ"));
+  assert.equal(rustaveli.wholeDistricts, undefined);
+  assert.deepEqual(live.find((o) => o.key === "telasi-live:TPA99167").addresses, ["ვერცხლის ქ"]);
+});
+
+test("Telasi live: planned works are planned, an unplanned cut is an emergency", () => {
+  assert.equal(live.find((o) => o.key === "telasi-live:GIS99147").emergency, false);
+  assert.equal(live.find((o) => o.key === "telasi-live:TPA99167").emergency, true);
+});
