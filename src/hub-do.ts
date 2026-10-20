@@ -13,7 +13,9 @@
 // The flow on every alarm:  poll due sources → diff → outbox → drain → re-arm.
 import { DurableObject } from "cloudflare:workers";
 import { SOURCES, sourceByName } from "./sources/index.ts";
-import { matchOutage, cityParts, streetSub, citySub, roadSub, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
+import { matchOutage, cityParts, streetSub, citySub, roadSub, placeSub, storedKeys, fromStoredKeys, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
+import { settlementsOf, placeKey, parsePlace, KNOWN_SETTLEMENTS } from "./places.ts";
+import type { Settlement } from "./places.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
 import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH, UNTIL_FINISHED } from "./diff.ts";
@@ -108,6 +110,9 @@ export interface AddResult {
   examples: string[];
   /** The districts this street is known to be in, Georgian; empty when unknown. */
   districts: string[];
+  /** Where it was understood to be, Georgian: the municipality and the settlement. */
+  city?: string;
+  place?: string;
 }
 
 export class Hub extends DurableObject<Env> {
@@ -148,6 +153,9 @@ export class Hub extends DurableObject<Env> {
         utility TEXT NOT NULL, city TEXT NOT NULL, label TEXT NOT NULL, created INTEGER NOT NULL);
       CREATE INDEX IF NOT EXISTS reports_by_time ON reports (created);
       CREATE TABLE IF NOT EXISTS fb_posts (key TEXT PRIMARY KEY, post_id TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS settlements (
+        key TEXT NOT NULL, name TEXT NOT NULL, city TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0,
+        last_seen INTEGER, PRIMARY KEY (key, city));
     `);
     // Added after launch. `first_read` marks what a source already held when the
     // bot first read it: an archive, "seen" only because the bot was switched on,
@@ -197,6 +205,7 @@ export class Hub extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const now = nowSec();
     this.backfillDistricts();
+    this.backfillSettlements();
     this.reconcileFacebook();
     try {
       await this.pollDue(now);
@@ -372,6 +381,7 @@ export class Hub extends DurableObject<Env> {
         );
         // Even an archive teaches where streets are, so this runs on a first read too.
         this.learnDistricts(o, subs);
+        this.learnSettlements(o, now);
         if (!firstRead && source.name !== REPORTS.name) this.confirmSignals(o, now);
         if (!firstRead && isCurrent(o, now, source.live(o.key))) queued += this.queueMatches(o, subs, utilitiesOf, "new");
         continue;
@@ -381,6 +391,9 @@ export class Hub extends DurableObject<Env> {
       // from one, or `last_seen` has gone stale.
       if (prev.finished_at !== null || prev.missing !== 0 || now - prev.last_seen >= LAST_SEEN_EVERY_SEC) {
         this.sql.exec(`UPDATE events SET last_seen = ?, missing = 0, finished_at = NULL WHERE key = ?`, now, o.key);
+        // A notice stored before a parser learned to name its settlements
+        // teaches them here, a few hours after the parser does.
+        this.learnSettlements(o, now);
       }
       if (prev.fp === fp && prev.finished_at === null) continue;
       this.sql.exec(
@@ -390,6 +403,7 @@ export class Hub extends DurableObject<Env> {
         fp, JSON.stringify(o), o.city, currentUntil(o, source.live(o.key)), o.key,
       );
       this.learnDistricts(o, subs);
+      this.learnSettlements(o, now);
       if (source.name !== REPORTS.name) this.confirmSignals(o, now);
       for (const s of this.rows<{ chat_id: number }>(`SELECT chat_id FROM sent WHERE key = ?`, o.key)) {
         this.enqueue(s.chat_id, o.key, "edit");
@@ -446,6 +460,46 @@ export class Hub extends DurableObject<Env> {
       this.learnDistricts(JSON.parse(ev.data) as Outage, subs);
     }
     this.setMeta("districts_learned", String(nowSec()));
+  }
+
+  /** Which settlement lies in which municipality, as the notices say (see src/places.ts). */
+  private learnSettlements(o: Outage, now: number): void {
+    for (const name of settlementsOf(o)) {
+      this.sql.exec(
+        `INSERT INTO settlements (key, name, city, seen, last_seen) VALUES (?, ?, ?, 1, ?)
+         ON CONFLICT (key, city) DO UPDATE SET seen = seen + 1, last_seen = excluded.last_seen`,
+        placeKey(name), name, o.city, now,
+      );
+    }
+  }
+
+  /** Once: learn the settlements from every notice stored before this table. */
+  private backfillSettlements(): void {
+    if (this.meta("settlements_learned")) return;
+    const now = nowSec();
+    for (const ev of this.rows<{ data: string }>(`SELECT data FROM events`)) {
+      this.learnSettlements(JSON.parse(ev.data) as Outage, now);
+    }
+    this.setMeta("settlements_learned", String(now));
+  }
+
+  /** The settlements a typed name may be, the seeded ones included. */
+  private settlementsNamed(typed: string): Settlement[] {
+    const key = placeKey(typed);
+    if (key.length < 3) return [];
+    const found = this.rows<Settlement>(`SELECT name, city, seen FROM settlements WHERE key = ?`, key);
+    for (const [name, city] of KNOWN_SETTLEMENTS) {
+      if (placeKey(name) === key && !found.some((s) => s.city === city)) found.push({ name, city, seen: 0 });
+    }
+    return found;
+  }
+
+  /** Whether Tbilisi's notices have named a street like this one. */
+  private tbilisiStreet(typed: string): boolean {
+    const sub: Sub = { id: -1, chatId: -1, ...streetSub(typed, DEFAULT_CITY) };
+    if (sub.keys.length === 0) return false;
+    return this.rows<{ data: string }>(`SELECT data FROM events WHERE city = ?`, DEFAULT_CITY)
+      .some((r) => matchOutage(JSON.parse(r.data) as Outage, [sub], () => UTILITIES).size > 0);
   }
 
   private queueMatches(o: Outage, subs: Sub[], utilitiesOf: (id: number) => Utility[], op: Op): number {
@@ -677,7 +731,7 @@ export class Hub extends DurableObject<Env> {
       if (have.some((s) => s.kind === "city" && s.city === sub.city)) continue;
       this.sql.exec(
         `INSERT OR IGNORE INTO subs (chat_id, kind, city, label, keys, created) VALUES (?, ?, ?, ?, ?, ?)`,
-        FACEBOOK_CHAT, sub.kind, sub.city, sub.label, JSON.stringify(sub.keys), nowSec(),
+        FACEBOOK_CHAT, sub.kind, sub.city, sub.label, storedKeys(sub), nowSec(),
       );
     }
   }
@@ -757,6 +811,7 @@ export class Hub extends DurableObject<Env> {
     this.sql.exec(`DELETE FROM fb_posts WHERE key IN (SELECT key FROM events WHERE last_seen < ?)`, cutoff);
     this.sql.exec(`DELETE FROM events WHERE last_seen < ?`, cutoff);
     this.sql.exec(`DELETE FROM reports WHERE created < ?`, now - 2 * 86400);
+    this.sql.exec(`DELETE FROM settlements WHERE last_seen < ?`, now - 180 * 86400);
     this.sql.exec(`INSERT OR REPLACE INTO meta (k, v) VALUES ('gc', ?)`, String(now));
   }
 
@@ -772,7 +827,7 @@ export class Hub extends DurableObject<Env> {
       kind: r.kind,
       city: r.city,
       label: r.label,
-      keys: JSON.parse(r.keys),
+      ...fromStoredKeys(r.keys),
       districts: r.districts ? r.districts.split("|") : [],
     }));
   }
@@ -855,6 +910,26 @@ export class Hub extends DurableObject<Env> {
     return this.add(chat, sub, district);
   }
 
+  /**
+   * A subscription from what the subscriber typed: "Руставели", "Батуми,
+   * Руставели", "Бакуриани, Гоголадзе", "Ноджихеви" (see src/places.ts).
+   */
+  async addPlace(chat: ChatInfo, text: string): Promise<AddResult> {
+    const q = parsePlace(
+      text, this.knownCities(), (w) => this.settlementsNamed(w), (w) => this.tbilisiStreet(w), DEFAULT_CITY,
+    );
+    if (!q.place) {
+      if (!q.street) return { ok: false, error: "too_short", current: 0, examples: [], districts: [] };
+      return { ...(await this.addStreet(chat, q.street, q.city, q.district)), city: q.city };
+    }
+    const lang = this.langOf(chat.id);
+    // "Бакуриани, Гоголадзе": the municipality is said in the confirmation, not in /list.
+    const where = [translit(q.place, lang), q.street].filter(Boolean).join(", ");
+    const sub = placeSub(where, q.city, q.place, q.street);
+    if (sub.keys.length === 0) return { ok: false, error: "too_short", current: 0, examples: [], districts: [] };
+    return { ...(await this.add(chat, sub)), city: q.city, place: q.place };
+  }
+
   async addRoad(chat: ChatInfo, label: string): Promise<AddResult> {
     const sub = roadSub(label);
     if (sub.keys.length === 0) return { ok: false, error: "too_short", current: 0, examples: [], districts: [] };
@@ -873,10 +948,10 @@ export class Hub extends DurableObject<Env> {
     }
     this.sql.exec(
       `INSERT OR IGNORE INTO subs (chat_id, kind, city, label, keys, created) VALUES (?, ?, ?, ?, ?, ?)`,
-      chat.id, fresh.kind, fresh.city, fresh.label, JSON.stringify(fresh.keys), nowSec(),
+      chat.id, fresh.kind, fresh.city, fresh.label, storedKeys(fresh), nowSec(),
     );
     const sub = this.subsOf(chat.id).find(
-      (s) => s.kind === fresh.kind && s.city === fresh.city && JSON.stringify(s.keys) === JSON.stringify(fresh.keys),
+      (s) => s.kind === fresh.kind && s.city === fresh.city && storedKeys(s) === storedKeys(fresh),
     )!;
     if (district) {
       this.sql.exec(

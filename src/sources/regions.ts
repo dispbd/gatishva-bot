@@ -39,6 +39,8 @@ export function parseEnergo(raw: string): Outage[] {
   return data.data.map((a) => {
     const area = squash(a.disconnectionArea ?? "");
     const city = squash(a.scName ?? a.regionName ?? "");
+    const paths = splitAddresses(area);
+    const settlements = [...new Set(paths.map((p) => energoSettlement(p, city)).filter((s): s is string => !!s))];
     return {
       key: `energo:${a.taskId}`,
       source: "energo",
@@ -50,10 +52,36 @@ export function parseEnergo(raw: string): Outage[] {
       end: parseLocal(a.reconnectionDate),
       title: squash(a.taskNote ?? ""),
       text: squash(`${city}: ${area}. ${a.taskNote ?? ""}`),
-      addresses: splitAddresses(area).map(energoPlace).filter(Boolean),
+      addresses: paths.map(energoPlace).filter(Boolean),
+      ...(settlements.length ? { settlements } : {}),
       url: "https://my.energo-pro.ge/ow/#/",
     } satisfies Outage;
   });
+}
+
+/**
+ * The settlement in an Energo path, if it surely names one. Under a district,
+ * "თელავის რ-ნი/ყარაჯალა/უცნობი", the next step is one. Under a town with three
+ * steps, "ბორჯომი/ბაკურიანი/წაქაძეს ქუჩა", the middle one. A lone step,
+ * "საგურამო", is one. But "town/X" is left alone: X is a village in
+ * "ჩოხატაური/ქვენობანი" and a street in "მარნეული/ნიზამი", and a street
+ * taken for a village would send a Tbilisi street's subscriber to Marneuli.
+ * The town itself, or the service centre, is not a settlement of its own.
+ */
+export function energoSettlement(path: string, city: string): string | undefined {
+  const steps = path.split("/").map((p) => p.trim().replace(/^(?:სოფ(?:ელი)?\.?|ქალაქი)\s*/, "")).filter(Boolean);
+  const underDistrict = /რ-ნი|რაიონი/.test(steps[0] ?? "");
+  if (!underDistrict && steps.length === 2) return undefined;
+  const candidate = underDistrict || steps.length >= 3 ? steps[1] : steps[0];
+  if (!candidate || candidate === "უცნობი" || candidate === "0") return undefined;
+  const town = steps.length > 1 ? [steps[0]!.replace(/\.$/, "")] : [];
+  const own = new Set([city, ...city.split(/\s*[-/]\s*/), ...town]);
+  if (own.has(candidate) && !underDistrict) return undefined;
+  if (own.has(candidate) && candidate === city) return undefined;
+  const looksLikeStreet = /ის$|ს$|\d|ქ\.?$|ქუჩ|გამზ|შეს|ჩიხ|მოედ|\./.test(candidate);
+  // Only a district's next step is a settlement whatever its form ("ზედა საქარა").
+  if (looksLikeStreet && !underDistrict) return undefined;
+  return /^[ა-ჿ]{3,}(?:[\s-][ა-ჿ]{2,})?$/.test(candidate) ? candidate : undefined;
 }
 
 /**

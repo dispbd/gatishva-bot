@@ -42,6 +42,12 @@ export interface Outage {
    */
   wholeCity?: boolean;
   /**
+   * The villages and towns the notice covers, Georgian nominative, when the
+   * provider's own structure says which words are settlements (Energo's paths).
+   * Teaches the bot where a settlement lies; see src/places.ts.
+   */
+  settlements?: string[];
+  /**
    * What the header names instead of city and district, Georgian: a road and
    * its section, "ვაზიანი-გომბორი-თელავი, 26-ე კმ".
    */

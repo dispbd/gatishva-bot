@@ -23,6 +23,12 @@ export interface Sub {
    * subscribers, since such a notice names no streets at all.
    */
   districts?: string[];
+  /**
+   * The settlement the street is in, as keys, when it is not the city itself:
+   * "Бакуриани, Гоголадзе" is the street in Borjomi's notices that also name
+   * Bakuriani (see src/places.ts).
+   */
+  place?: string[];
 }
 
 export const DEFAULT_CITY = "თბილისი";
@@ -34,6 +40,30 @@ export function citySkel(city: string): string {
 /** A street subscription as stored: the keys are derived once, at subscription time. */
 export function streetSub(label: string, city = DEFAULT_CITY): Omit<Sub, "id" | "chatId"> {
   return { kind: "street", city: citySkel(city), label: label.trim(), keys: streetKeys(label) };
+}
+
+/**
+ * A street in a settlement of a municipality, or the settlement alone when no
+ * street is given. `label` is what the subscriber reads back.
+ */
+export function placeSub(label: string, city: string, place: string, street?: string): Omit<Sub, "id" | "chatId"> {
+  const placeKeys = streetKeys(place).slice(0, 1);
+  if (!street) return { kind: "street", city: citySkel(city), label: label.trim(), keys: placeKeys };
+  return { kind: "street", city: citySkel(city), label: label.trim(), keys: streetKeys(street), place: placeKeys };
+}
+
+/**
+ * The keys column holds the settlement's keys too, marked "@", so that the
+ * same street in two villages of one municipality is two subscriptions.
+ */
+export function storedKeys(sub: Pick<Sub, "keys" | "place">): string {
+  return JSON.stringify([...(sub.place ?? []).map((k) => `@${k}`), ...sub.keys]);
+}
+
+export function fromStoredKeys(json: string): Pick<Sub, "keys" | "place"> {
+  const all = JSON.parse(json) as string[];
+  const place = all.filter((k) => k.startsWith("@")).map((k) => k.slice(1));
+  return { keys: all.filter((k) => !k.startsWith("@")), ...(place.length ? { place } : {}) };
 }
 
 /** A road, a pass or a village on one: "Гудаури", "Омало". */
@@ -93,7 +123,11 @@ export function matchOutage(
       if (sub.kind === "road") continue;
     } else if (sub.kind === "street" || sub.kind === "road") {
       sk ??= skeletonize(text);
-      if (!o.wholeCity && findKeys(text, sub.keys, sk).length === 0 && !inCutDistrict(o, sub)) continue;
+      if (!o.wholeCity) {
+        if (findKeys(text, sub.keys, sk).length === 0 && !inCutDistrict(o, sub)) continue;
+        // A street of that name elsewhere in the municipality is not this one.
+        if (sub.place?.length && findKeys(text, sub.place, sk).length === 0) continue;
+      }
     }
     const list = out.get(sub.chatId) ?? [];
     list.push(sub);
