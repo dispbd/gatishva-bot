@@ -183,16 +183,15 @@ function decodeTwice(s: string): string {
 
 /**
  * The point in a maps page's own HTML, for a link that answers with a page
- * rather than a redirect: Google's static map "center=LAT%2CLON", its
- * "!3d…!4d…" and "@LAT,LON,Zz" in embedded URLs, and "[null,null,LAT,LON]" in
- * the state it boots from.
+ * rather than a redirect: the place's pin, "!3d…!4d…", or the static map
+ * drawn around it, "center=LAT%2CLON". Not the view the page opens on
+ * ("@LAT,LON,Zz", "[null,null,LAT,LON]"): Google centres that on where the
+ * request came from, Europe for Cloudflare.
  */
 export function pointOfHtml(html: string): Point | undefined {
   const tries = [
-    /center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/,
     /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
-    /@(-?\d+\.\d+),(-?\d+\.\d+),\d+(?:\.\d+)?z/,
-    /\[null,null,(-?\d+\.\d+),(-?\d+\.\d+)\]/,
+    /center=(-?\d+\.\d+)(?:%2C|,)(-?\d+\.\d+)/,
   ];
   for (const re of tries) {
     const m = re.exec(html);
@@ -225,14 +224,20 @@ export interface LinkRead {
  * "yandex.ru/maps/-/…") through their redirects, a few hops at most, as a
  * browser would: some answer a client that does not look like one with a page
  * instead of a redirect, and then the page itself is read.
+ *
+ * A link that names an address is read as that address at once. Google's
+ * place links ("/maps/place/Baia+Gallery,+19A+Pavle+Ingorokva+St,+Tbilisi/
+ * data=…", 2026-10-21) carry no point, and the page behind them, asked from
+ * Cloudflare's European addresses, centres its map on Europe: the bot said
+ * "not in Georgia" to a Tbilisi gallery.
  */
 export async function readLink(url: string): Promise<LinkRead> {
   let at = url;
-  let address: string | undefined;
   for (let hop = 0; hop < 5; hop++) {
     const found = pointOfUrl(at);
     if (found) return { point: found };
-    address ??= addressOfUrl(at);
+    const address = addressOfUrl(at);
+    if (address) return { address };
     if (/^geo:/i.test(at)) break;
     const step = await fetchWithin(
       at,
@@ -257,7 +262,7 @@ export async function readLink(url: string): Promise<LinkRead> {
       at = new URL(refresh.replace(/&amp;/g, "&"), at).toString();
       continue;
     }
-    return address ? { address } : { stoppedAt: `${new URL(at).host} ${step.status}` };
+    return { stoppedAt: `${new URL(at).host} ${step.status}` };
   }
-  return address ? { address } : { stoppedAt: `${/^geo:/i.test(at) ? "geo" : new URL(at).host} (hops)` };
+  return { stoppedAt: `${/^geo:/i.test(at) ? "geo" : new URL(at).host} (hops)` };
 }

@@ -107,7 +107,8 @@ test("Google's other shapes: a consent page, a search, a page, an address withou
   assert.deepEqual(pointOfUrl("https://consent.google.com/m?continue=https://www.google.com/maps/place/x/%4041.7099%2C44.7653%2C17z&gl=DE"), vake);
   assert.deepEqual(pointOfUrl("https://www.google.com/maps/search/41.7099,+44.7653?entry=tts"), vake);
   assert.deepEqual(pointOfHtml('<meta content="https://maps.google.com/maps/api/staticmap?center=41.7099%2C44.7653&zoom=17">'), vake);
-  assert.deepEqual(pointOfHtml("window.APP_INITIALIZATION_STATE=[[[1234.5,44.7653,41.7099],[0,0,0],[1024,768],13.1],[null,null,41.7099,44.7653]]"), vake);
+  // The view a page opens on is where the request came from, not the place.
+  assert.equal(pointOfHtml("window.APP_INITIALIZATION_STATE=[[[1234.5,8.68,50.11],[0,0,0],[1024,768],13.1],[null,null,50.11,8.68]]"), undefined);
   assert.equal(addressOfUrl("https://www.google.com/maps/place/Ilia+Chavchavadze+Ave+37,+Tbilisi/data=!4m2!3m1!1s0x40440d:0x1"), "Ilia Chavchavadze Ave 37, Tbilisi");
   assert.equal(addressOfUrl("https://www.google.com/maps/place/Stamba/data=!4m2"), undefined); // a name, not an address
 
@@ -121,4 +122,20 @@ test("a link that leads nowhere says where it stopped, for the log", async (t) =
   mock.method(globalThis, "fetch", async () => new Response("<html>nothing</html>", { status: 200 }));
   t.after(() => mock.restoreAll());
   assert.deepEqual(await readLink("https://maps.app.goo.gl/Nothing"), { stoppedAt: "maps.app.goo.gl 200" });
+});
+
+test("a Google place link is read as its address, without asking for the page", async (t) => {
+  // The real redirect of a share link, 2026-10-21.
+  const place = "https://www.google.com/maps/place/Baia+Gallery,+19A+Pavle+Ingorokva+St,+Tbilisi+0108/data=!4m2!3m1!1s0x404473ccf3f254b7:0xf9390d12caa6d1d1!18m1!1e1?utm_source=mstt_1&entry=gps";
+  const asked = [];
+  mock.method(globalThis, "fetch", async (url) => {
+    asked.push(String(url));
+    return new Response(null, { status: 302, headers: { location: place } });
+  });
+  t.after(() => mock.restoreAll());
+  assert.deepEqual(await readLink("https://maps.app.goo.gl/BaxS5JgQMpMeMRhVA"), { address: "Baia Gallery, 19A Pavle Ingorokva St, Tbilisi 0108" });
+  assert.equal(asked.length, 1); // the short link only
+  assert.equal(fromFullAddress("Baia Gallery, 19A Pavle Ingorokva St, Tbilisi 0108", []), "Pavle Ingorokva St");
+  // A date naming the street keeps its number.
+  assert.equal(fromFullAddress("9 April St 5, Tbilisi, Georgia", []), "9 April St");
 });
