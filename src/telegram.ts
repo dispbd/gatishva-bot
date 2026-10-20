@@ -32,6 +32,11 @@ export interface TgMessage {
    * which is why the "type a street" prompt is a force-reply.
    */
   reply_to_message?: TgMessage;
+  /**
+   * A service message in a group that has just become a supergroup: the
+   * group's new id (see src/chat-move.ts).
+   */
+  migrate_to_chat_id?: number;
 }
 
 export interface TgCallbackQuery {
@@ -73,13 +78,16 @@ export class TelegramError extends Error {
   readonly errorCode: number | undefined;
   /** Seconds Telegram asked us to wait (HTTP 429). */
   readonly retryAfter: number | undefined;
+  /** The group became a supergroup, and this is its new id. */
+  readonly migrateTo: number | undefined;
 
-  constructor(method: string, description: string, errorCode?: number, retryAfter?: number) {
+  constructor(method: string, description: string, errorCode?: number, retryAfter?: number, migrateTo?: number) {
     super(`Telegram ${method} failed: ${description}`);
     this.name = "TelegramError";
     this.description = description;
     this.errorCode = errorCode;
     this.retryAfter = retryAfter;
+    this.migrateTo = migrateTo;
   }
 }
 
@@ -101,6 +109,7 @@ export async function tg<T = any>(
       data.description ?? String(r.status),
       data.error_code,
       data.parameters?.retry_after,
+      data.parameters?.migrate_to_chat_id,
     );
   }
   return data.result;
@@ -109,12 +118,13 @@ export async function tg<T = any>(
 /**
  * The chat is gone for good as far as we are concerned: the user blocked the
  * bot, deleted their account, or the bot was removed from the group. Retrying
- * cannot help, so the caller drops the chat's subscriptions.
+ * cannot help, so the caller drops the chat's subscriptions. A group that became
+ * a supergroup is not gone: see `migrateTo`.
  */
 export function isChatGone(e: unknown): boolean {
   if (!(e instanceof TelegramError)) return false;
   if (e.errorCode === 403) return true;
-  return /chat not found|user is deactivated|group chat was (deleted|upgraded)/i.test(e.description);
+  return /chat not found|user is deactivated|group chat was deleted/i.test(e.description);
 }
 
 /** Editing to identical text is an error in Telegram, but a no-op for us. */

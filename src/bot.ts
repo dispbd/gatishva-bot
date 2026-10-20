@@ -58,6 +58,9 @@ async function mayEdit(env: Env, m: { chat: { id: number; type: string }; from?:
 export async function handleUpdate(env: Env, update: TgUpdate): Promise<void> {
   if (update.callback_query) return await onButton(env, update.callback_query);
   const m = update.message ?? update.channel_post;
+  // Telegram tells the old group first; acting on it moves the subscriptions
+  // before any outage has to be sent there and bounce.
+  if (m?.migrate_to_chat_id) return await hub(env).migrateChat(m.chat.id, m.migrate_to_chat_id);
   if (m?.text) await onText(env, m);
 }
 
