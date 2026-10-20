@@ -59,6 +59,10 @@ function liveItem(i: ApiItem): Outage[] {
   const id = i.code ?? i.id;
   if (id === undefined) return [];
   const text = squash(htmlToText(i.editor ?? i.full_title ?? i.title ?? ""));
+  const title = squash(htmlToText(i.full_title ?? i.title ?? ""));
+  // The live list holds planned works too, titled "გეგმური"; an unplanned cut
+  // is "არაგეგმური წყვეტა". Anything else is taken for an emergency.
+  const planned = /გეგმ/.test(title) && !/არაგეგმ/.test(title);
   return [
     wholeIfNoStreets({
       key: `telasi-live:${id}`,
@@ -67,10 +71,10 @@ function liveItem(i: ApiItem): Outage[] {
       utility: "power",
       city: TBILISI,
       ...districtFields(text),
-      emergency: true,
+      emergency: !planned,
       start: parseLocal(i.outage_time) ?? parseLocal(i.date),
       end: parseLocal(i.poweron_time),
-      title: squash(i.full_title ?? i.title ?? ""),
+      title,
       text,
       addresses: liveAddresses(text),
       url: `${PAGE}?outage=${encodeURIComponent(String(id))}`,

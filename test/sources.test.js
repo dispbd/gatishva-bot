@@ -127,3 +127,8 @@ test("Telasi live: the bare street list is the address list", () => {
   assert.equal(rustaveli.wholeDistricts, undefined);
   assert.deepEqual(live.find((o) => o.key === "telasi-live:TPA99167").addresses, ["ვერცხლის ქ"]);
 });
+
+test("Telasi live: planned works are planned, an unplanned cut is an emergency", () => {
+  assert.equal(live.find((o) => o.key === "telasi-live:GIS99147").emergency, false);
+  assert.equal(live.find((o) => o.key === "telasi-live:TPA99167").emergency, true);
+});
