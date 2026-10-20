@@ -10,6 +10,8 @@
 // update looks up first: a new chat takes its first user's Telegram language.
 import { hub } from "./hub-do.ts";
 import type { ChatInfo, AddResult, ReportResult } from "./hub-do.ts";
+import { isWholeCity } from "./candidates.ts";
+import type { Candidate } from "./candidates.ts";
 import { tg, describe, escapeHtml } from "./telegram.ts";
 import type { TgUpdate, TgMessage, TgCallbackQuery, TgUser } from "./telegram.ts";
 import { splitCityStreet, resolveCity, KNOWN_CITIES } from "./cities.ts";
@@ -153,9 +155,53 @@ async function askCity(env: Env, chatId: number, lang: Lang, from?: TgUser): Pro
 
 async function addStreet(env: Env, m: TgMessage, text: string, lang: Lang): Promise<void> {
   if (!(await mayEdit(env, m))) return await send(env, m.chat.id, t(lang).notAdmin);
-  // The Hub reads the place: city, village, street, district (src/places.ts).
-  const r = await hub(env).addPlace(chatOf(m.chat), text);
-  await send(env, m.chat.id, confirmation(r, r.city ?? DEFAULT_CITY, lang));
+  // The Hub reads the place — city, village, street, district — and either
+  // subscribes or, when the notices read it several ways, asks which.
+  const out = await hub(env).addPlace(chatOf(m.chat), text);
+  if (out.status === "choose") {
+    return await send(env, m.chat.id, chooseText(text, lang), { reply_markup: chooseKeyboard(out.pending, out.candidates, lang) });
+  }
+  const r = out.result;
+  await send(env, m.chat.id, confirmation(r, r.city ?? DEFAULT_CITY, lang), r.ok ? notThisKeyboard(out.pending, lang) : {});
+}
+
+// --- confirming an address (see src/candidates.ts) ----------------------------
+
+function chooseText(typed: string, lang: Lang): string {
+  const S = t(lang);
+  return `${S.chooseTitle(escapeHtml(typed))}\n<i>${S.chooseHint}</i>`;
+}
+
+/** "пр. Руставели · Мтацминда", "Бакуриани (Боржоми)": a reading as the reader would say it. */
+function candidateLabel(c: Candidate, lang: Lang): string {
+  const city = translit(c.city, lang);
+  if (isWholeCity(c)) return t(lang).chooseCity(city);
+  if (c.place) return `${translit(c.place, lang)}${c.street ? `, ${c.street}` : ""} (${city})`;
+  // The published address names the street best; its house numbers do not belong here.
+  const street = c.example
+    ? addressLocal(c.example, lang).replace(/\s*(№|No\.)\s*[\d\s,\-–]+.*$/, "").replace(/\s*\((?:нечёт|чёт|odd|even)\.?\)$/, "")
+    : (c.street ?? "");
+  const where = c.district ? ` · ${translit(c.district, lang)}` : "";
+  return `${c.city === DEFAULT_CITY ? "" : `${city}, `}${street}${where}`;
+}
+
+function chooseKeyboard(pending: number, list: Candidate[], lang: Lang) {
+  const S = t(lang);
+  const rows = list.map((c, i) => [{
+    text: `${candidateLabel(c, lang)}${c.count ? ` · ${c.count}` : ""}`.slice(0, 64),
+    callback_data: `pk:${pending}:${i}`,
+  }]);
+  // One street in several districts: it may be the subscriber's in all of them.
+  const same = (c: Candidate) => `${c.city}|${c.place ?? ""}|${c.street ?? ""}`;
+  if (list.length > 1 && list.every((c) => same(c) === same(list[0]!))) {
+    rows.push([{ text: S.chooseAll, callback_data: `pk:${pending}:a` }]);
+  }
+  rows.push([{ text: S.chooseOther, callback_data: `po:${pending}` }]);
+  return { inline_keyboard: rows };
+}
+
+function notThisKeyboard(pending: number, lang: Lang) {
+  return { reply_markup: { inline_keyboard: [[{ text: t(lang).notThis, callback_data: `pa:${pending}` }]] } };
 }
 
 async function addCity(env: Env, m: TgMessage, text: string, lang: Lang): Promise<void> {
@@ -318,6 +364,36 @@ async function onButton(env: Env, q: TgCallbackQuery): Promise<void> {
 
   if (data === "m:add") return void (await Promise.all([answer(), askStreet(env, chatId, lang, q.from)]));
   if (data === "m:city") return void (await Promise.all([answer(), askCity(env, chatId, lang, q.from)]));
+
+  // An address choice: a reading picked, "not this one", or "something else".
+  const edit = (text: string, extra: Record<string, unknown> = {}) =>
+    tg(env, "editMessageText", {
+      chat_id: chatId, message_id: msg.message_id, text, parse_mode: "HTML", link_preview_options: { is_disabled: true }, ...extra,
+    }).catch(() => {});
+  const chosen = /^pk:(\d+):(\d+|a)$/.exec(data);
+  if (chosen) {
+    const pending = Number(chosen[1]);
+    const r = await hub(env).pick(chatOf(msg.chat), pending, chosen[2] === "a" ? "all" : Number(chosen[2]));
+    if (!r) return void (await Promise.all([answer(t(lang).choiceExpired), edit(t(lang).choiceExpired)]));
+    await answer();
+    await edit(confirmation(r, r.city ?? DEFAULT_CITY, lang), r.ok ? notThisKeyboard(pending, lang) : {});
+    return;
+  }
+  const again = /^pa:(\d+)$/.exec(data);
+  if (again) {
+    const pending = Number(again[1]);
+    const p = await hub(env).notThis(chatId, pending);
+    if (!p) return void (await Promise.all([answer(t(lang).choiceExpired), edit(t(lang).choiceExpired)]));
+    await answer(t(lang).removed);
+    if (p.candidates.length > 1) return void (await edit(chooseText(p.text, lang), { reply_markup: chooseKeyboard(pending, p.candidates, lang) }));
+    await edit(t(lang).retype);
+    return await askStreet(env, chatId, lang, q.from);
+  }
+  if (/^po:\d+$/.test(data)) {
+    await answer();
+    await tg(env, "editMessageReplyMarkup", { chat_id: chatId, message_id: msg.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    return await askStreet(env, chatId, lang, q.from);
+  }
 
   const del = /^del:(\d+)$/.exec(data);
   if (del) {
