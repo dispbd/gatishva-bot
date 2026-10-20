@@ -333,6 +333,9 @@ const TYPE_WORDS: { prefix: string; ru: string; en: string; lead?: boolean; enLe
   { prefix: "mkr", ru: "мкр", en: "Microdistrict", exact: true },
   { prefix: "mr", ru: "мкр", en: "Microdistrict", exact: true },
   { prefix: "dasahleb", ru: "пос.", en: "Settlement" },
+  { prefix: "daba", ru: "пос.", en: "Daba", lead: true, enLead: true, exact: true }, // "დაბა კულაში"
+  { prefix: "uban", ru: "квартал", en: "Quarter" }, // "ონაროს უბანი"
+  { prefix: "gasavlel", ru: "проезд", en: "Passage" }, // Telasi's own misspelling of გასასვლელი
   { prefix: "sopel", ru: "с.", en: "Village", lead: true, enLead: true },
   { prefix: "sop", ru: "с.", en: "Village", lead: true, enLead: true, exact: true },
   { prefix: "s", ru: "с.", en: "Village", lead: true, enLead: true, exact: true }, // "ს." — also "village"
@@ -404,16 +407,174 @@ export function addressLocal(item: string, lang: Lang): string {
   return addressCached(`${lang}\u0000${item}`);
 }
 
+/**
+ * An address is often a path of places, "ყვარელი, ილ.ჭავჭავაძეს ქუჩა" or "დაბა
+ * ახალდაბა. ყაზბეგის ქ.", and each part is translated on its own: otherwise
+ * "ул." leads the town's name instead of the street's.
+ */
 function addressUncached(item: string, lang: Lang): string {
-  // "N31-39(კენტებს)": the parenthesis is its own word, "odd numbers".
-  // A Roman numeral glued to its word ("Iშესახვევის") is two words.
-  const tokens = item
-    .replace(/\(/g, " (")
-    .replace(/\)/g, ") ")
+  const out: string[] = [];
+  for (const part of addressParts(normaliseAddress(item))) {
+    const local = partLocal(part, lang, out.length === 0);
+    // Energo repeats the town: "მესტია, მესტია, ბ.კახიანის ქ".
+    if (local && local !== out[out.length - 1]) out.push(local);
+  }
+  return out.join(", ");
+}
+
+/**
+ * The spellings that hide where one word ends. Telasi puts a Tbilisi suburb in
+ * front, "(სოფ.ახალდაბა)იეთიმ გურჯის ქ" — it reads as a qualifier, so it goes
+ * last. Initials and abbreviations lose their space, "შ.რუსთაველის"; numbers
+ * glue to words, "მე-2ჩიხი"; Roman numerals too, "Iშესახვევის".
+ */
+function normaliseAddress(item: string): string {
+  const front = /^\s*\(([^()]*)\)\s*(.+)$/.exec(item);
+  const s = front ? `${front[2]} (${front[1]})` : item;
+  return s
+    .replace(/([ა-ჿ])\.(?=[ა-ჿ№\d])/g, "$1. ")
+    .replace(/\s*#\s*(?=\d)/g, " № ") // "თამარ მეფის ქუჩა#2"
+    .replace(/([ა-ჿ])№/g, "$1 №")
+    .replace(/(\d)(?=[ა-ჿ]{3})/g, "$1 ")
     .replace(/\b([IVX]+)(?=[ა-ჿ])/g, "$1 ")
+    .replace(/([^\s(])\(/g, "$1 (")
+    .replace(/\)(?=[^\s,.)])/g, ") ")
     .replace(/\s+/g, " ")
-    .trim()
-    .split(" ");
+    .trim();
+}
+
+/** Split at commas and at ". " between words — never inside a parenthesis. */
+function addressParts(s: string): string[] {
+  const raw: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i]!;
+    if (ch === "(") depth++;
+    if (ch === ")") depth = Math.max(0, depth - 1);
+    const sentence = ch === "." && s[i + 1] === " " && hasGeorgian(s[i + 2] ?? "") && !isAbbreviation(cur);
+    if (depth === 0 && (ch === "," || sentence)) {
+      raw.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  raw.push(cur);
+  const parts: string[] = [];
+  for (const p of raw.map((x) => x.trim()).filter(Boolean)) {
+    // "ბათუმის 25, 38": a lone house number belongs to the street before it.
+    if (parts.length && HOUSE_NUMBERS.test(p)) parts[parts.length - 1] += `, ${p}`;
+    else parts.push(...splitVillage(p));
+  }
+  return parts;
+}
+
+/** "...ს. ხიმშიაშვილის": the text before a dot ends with an initial or an abbreviation. */
+function isAbbreviation(before: string): boolean {
+  const last = before.trim().split(" ").pop() ?? "";
+  return last.length <= 3 && hasGeorgian(last);
+}
+
+/** Words that come before a village's name and belong to it: "ქვემო ხანდაკი". */
+const NAME_MODIFIERS = new Set(["ქვემო", "ზემო", "ზედა", "შუა", "ახალი", "ძველი", "დიდი", "პატარა"]);
+
+const VILLAGE_TYPES = new Set(["sopel", "sop", "s", "daba"]);
+
+function isVillageWord(tokens: string[], i: number): boolean {
+  const t = typeWord(tokens[i]!);
+  return !!t && VILLAGE_TYPES.has(t.prefix) && !isInitial(tokens, i);
+}
+
+/**
+ * "სოფელი დიღომი დიდგორის ქუჩა" is a village and a street in it; "ს.
+ * ნოჯიხევი 2 ქ." a village and its second street. The village takes its name,
+ * the rest is a part of its own.
+ */
+function splitVillage(part: string): string[] {
+  const tokens = part.split(" ");
+  const i = tokens.findIndex((_, k) => isVillageWord(tokens, k));
+  if (i === -1 || i + 1 >= tokens.length) return [part];
+  let end = i + 1;
+  if (NAME_MODIFIERS.has(tokens[end]!) && end + 1 < tokens.length) end++;
+  const rest = tokens.slice(end + 1);
+  // "სოფ.ახალდაბა (მე-2 ჩიხი)": a parenthesis stays with the village.
+  const own = (w: string) => !!typeWord(w) || /^ნაწილ/.test(w); // "სოფ. ჩხარი ნაწილობრივ"
+  if (rest.every(own) || rest[0]!.startsWith("(")) return [part];
+  return [tokens.slice(0, end + 1).join(" "), rest.join(" ")];
+}
+
+/**
+ * "ს." is "village" and also an initial: "ს. ხიმშიაშვილის ქ" is S. Khimshiashvili
+ * Street. A name in the genitive with a street type after it is a person's.
+ */
+function isInitial(tokens: string[], i: number): boolean {
+  if (skel(tokens[i]!) !== "s") return false;
+  const next = tokens[i + 1];
+  return !!next && /ს$/.test(next) && tokens.slice(i + 2).some((w) => STREET_TYPES.has(typeWord(w)?.prefix ?? ""));
+}
+
+const STREET_TYPES = new Set(["k", "kuch", "gamz", "shesahvev", "shes", "chih", "moedan", "moedn"]);
+
+/**
+ * Telasi's abbreviations of Tbilisi's suburbs and districts, "(წყნ)", "(სამგ)":
+ * a short word that only one of these begins with is that one.
+ */
+const PLACES_ABBREVIATED = [
+  "წყნეთი", "კოჯორი", "ტაბახმელა", "შინდისი", "ოქროყანა", "წავკისი", "ლისი", "დიღომი",
+  "გლდანი", "ნაძალადევი", "დიდუბე", "ჩუღურეთი", "საბურთალო", "ვაკე", "მთაწმინდა",
+  "კრწანისი", "ისანი", "სამგორი", "ვარკეთილი", "სოლოლაკი", "ავლაბარი",
+];
+
+function expandAbbreviation(word: string): string {
+  if (word.length < 3 || word.length > 5 || !hasGeorgian(word)) return word;
+  const found = PLACES_ABBREVIATED.filter((p) => p.startsWith(word) && p !== word);
+  return found.length === 1 ? found[0]! : word;
+}
+
+const ORDINAL = /^მე-?(\d+)$/;
+
+function ordinal(n: string, lang: Lang): string {
+  if (lang !== "en") return `${n}-й`;
+  const last = n.slice(-1);
+  const teen = n.slice(-2, -1) === "1";
+  return n + (!teen && last === "1" ? "st" : !teen && last === "2" ? "nd" : !teen && last === "3" ? "rd" : "th");
+}
+
+/**
+ * "ნაწილობრივ" (partly), and "ნაწილი" after a genitive — "სოფ. ჭოგნარის
+ * ნაწილი", part of the village. "სამხედრო ნაწილი" is a military unit.
+ */
+function isPartly(tokens: string[], i: number): boolean {
+  const tok = tokens[i]!;
+  return tok === "ნაწილობრივ" || (tok === "ნაწილი" && i > 0 && /ს$/.test(tokens[i - 1]!));
+}
+
+const MONTHS: Record<string, [string, string]> = {
+  "იანვრის": ["января", "January"], "თებერვლის": ["февраля", "February"], "მარტის": ["марта", "March"],
+  "აპრილის": ["апреля", "April"], "მაისის": ["мая", "May"], "ივნისის": ["июня", "June"],
+  "ივლისის": ["июля", "July"], "აგვისტოს": ["августа", "August"], "სექტემბრის": ["сентября", "September"],
+  "ოქტომბრის": ["октября", "October"], "ნოემბრის": ["ноября", "November"], "დეკემბრის": ["декабря", "December"],
+};
+
+/** One part of an address, as the existing rules have always read a street. */
+function partLocal(part: string, lang: Lang, first = false): string {
+  // A parenthesis is translated by itself and stays where it stood.
+  const groups: string[] = [];
+  const marked = part.replace(/\(([^()]*)\)/g, (_, inner: string) => {
+    const words = inner.trim().split(" ");
+    const local = words.length && words.every((w) => typeWord(w))
+      ? words.map((w) => (lang === "en" ? typeWord(w)!.en : typeWord(w)!.ru)).join(" ") // "(კენტებს)" → "(нечёт.)"
+      : `(${partLocal(words.length === 1 ? expandAbbreviation(words[0]!) : inner.trim(), lang)})`;
+    groups.push(local);
+    return ` \u0001${groups.length - 1} `;
+  });
+  const tokens = marked.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+
+  // A place written as a type word alone — Tskneti's quarter "დაბა" — is a name.
+  const words = tokens.filter((w) => !w.startsWith("\u0001"));
+  const allTypes = words.length > 0 && words.every((w) => typeWord(w));
+
   const lead: string[] = [];
   const body: string[] = [];
   // The name to put into the nominative is the last name word before a type
@@ -421,7 +582,10 @@ function addressUncached(item: string, lang: Lang): string {
   let nameEnd = -1;
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i]!;
-    if (typeWord(tok) || !hasGeorgian(tok) || /\d/.test(tok)) {
+    // A parenthesis inside a name does not end it: "რაიმონდ (გურამ) გოგოლაძის".
+    if (tok.startsWith("\u0001")) continue;
+    const isType = (!!typeWord(tok) && !isInitial(tokens, i) && !allTypes) || isPartly(tokens, i);
+    if (isType || !hasGeorgian(tok) || /\d/.test(tok)) {
       if (nameEnd === -1 && i > 0) nameEnd = i - 1;
     }
   }
@@ -429,7 +593,20 @@ function addressUncached(item: string, lang: Lang): string {
 
   const no = lang === "en" ? "No." : "№";
   tokens.forEach((tok, i) => {
-    const t = typeWord(tok);
+    if (tok.startsWith("\u0001")) return body.push(groups[Number(tok.slice(1))]!);
+    // "ქ თბილისი, …": a "ქ" before the first place's name is ქალაქი, the town.
+    // Elsewhere, "ქ. წამებულის", it is the street it usually is.
+    if (first && i === 0 && /^ქ\.?$/.test(tok) && tokens.length > 1 && !/ს$/.test(tokens[1]!)) {
+      if (lang !== "en") lead.push("г.");
+      return;
+    }
+    if (isPartly(tokens, i)) return body.push(lang === "en" ? "(partly)" : "(частично)");
+    const ord = ORDINAL.exec(tok);
+    if (ord) return body.push(ordinal(ord[1]!, lang));
+    // "9 აპრილის", "26 მაისის": a date names the street.
+    const month = /^\d+$/.test(tokens[i - 1] ?? "") ? MONTHS[tok] : undefined;
+    if (month) return body.push(lang === "en" ? month[1] : month[0]);
+    const t = allTypes || isInitial(tokens, i) ? undefined : typeWord(tok);
     if (t) {
       const label = lang === "en" ? t.en : t.ru;
       const leads = lang === "en" ? t.enLead : t.lead;
@@ -438,7 +615,9 @@ function addressUncached(item: string, lang: Lang): string {
       return;
     }
     if (tok === "N" || tok === "№") return body.push(no);
-    const word = i === nameEnd ? toNominative(tok) : tok;
+    // An initial, "ბ.", is not a name to decline; "უტიაშვილის." is.
+    const bare = tok.replace(/\.$/, "");
+    const word = i === nameEnd && !/^[ა-ჿ]{1,3}\.$/.test(tok) ? toNominative(bare) : tok;
     body.push(translit(word.replace(/^N(?=\d)/, `${no} `), lang));
   });
   return [...lead, ...body].join(" ").replace(/\s+/g, " ").trim();
