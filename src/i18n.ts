@@ -96,6 +96,13 @@ export interface Strings {
   promptStreet: string;
   promptStreetHint: string;
   streetExample: string;
+  /** A point instead of a name: the location button and what can go wrong. */
+  sendLocation: string;
+  locationHint: string;
+  locationOutside: string;
+  locationUnknown: string;
+  linkUnreadable: string;
+  geoFailed: string;
   promptCity: string;
   promptCityHint: string;
   cityExample: string;
@@ -197,6 +204,8 @@ const ru: Strings = {
 <b>В селе или посёлке</b> — достаточно его названия, с улицей или без:
 /add Бакуриани, Гоголадзе
 
+<b>По точке на карте:</b> пришлите геолокацию 📍 или ссылку из карт — улицу найдёт OpenStreetMap, саму точку бот не хранит.
+
 <b>На весь город:</b>
 /city Кутаиси
 
@@ -223,6 +232,12 @@ const ru: Strings = {
   promptStreet: "📍 Какую улицу добавить?",
   promptStreetHint: "Ответьте на это сообщение названием — по-русски, латиницей или по-грузински. Для другого города: «Батуми, Руставели».",
   streetExample: "Политковская",
+  sendLocation: "📍 Отправить геолокацию",
+  locationHint: "Или пришлите геолокацию 📍 либо ссылку из карт — улицу по точке найдёт OpenStreetMap, саму точку бот не хранит.",
+  locationOutside: "Эта точка не в Грузии — пришлите другую или напишите адрес.",
+  locationUnknown: "По этой точке улицу не нашёл — напишите адрес словами.",
+  linkUnreadable: "Не смог прочитать точку из этой ссылки — пришлите геолокацию 📍 или напишите адрес.",
+  geoFailed: "Сервис карт сейчас не отвечает — попробуйте чуть позже или напишите адрес.",
   promptCity: "🏙 Какой город?",
   promptCityHint: "Ответьте на это сообщение: например, «Батуми».",
   cityExample: "Батуми",
@@ -320,6 +335,8 @@ const en: Strings = {
 <b>In a village or small town</b> — its name will do, with a street or without:
 /add Bakuriani, Gogoladze
 
+<b>From a point on the map:</b> send a location 📍 or a maps link — OpenStreetMap finds the street; the bot does not keep the point.
+
 <b>A whole city:</b>
 /city Kutaisi
 
@@ -346,6 +363,12 @@ Sources: GWP (water, Tbilisi), Telasi (power, Tbilisi), Tbilisi Energy (gas, Tbi
   promptStreet: "📍 Which street?",
   promptStreetHint: "Reply to this message with its name — in Latin, Russian or Georgian letters. For another city: “Batumi, Rustaveli”.",
   streetExample: "Politkovskaya",
+  sendLocation: "📍 Send my location",
+  locationHint: "Or send a location 📍 or a maps link — OpenStreetMap finds the street; the bot does not keep the point.",
+  locationOutside: "This point is not in Georgia — send another one or write the address.",
+  locationUnknown: "No street found at this point — write the address in words.",
+  linkUnreadable: "Couldn't read a point from this link — send a location 📍 or write the address.",
+  geoFailed: "The map service isn't answering right now — try again a little later, or write the address.",
   promptCity: "🏙 Which city?",
   promptCityHint: "Reply to this message: “Batumi”, for example.",
   cityExample: "Batumi",
@@ -444,6 +467,8 @@ const ka: Strings = {
 <b>სოფელში ან დაბაში</b> — საკმარისია მისი სახელი, ქუჩით ან მის გარეშე:
 /add ბაკურიანი, გოგოლაძე
 
+<b>რუკის წერტილით:</b> გამოგზავნეთ მდებარეობა 📍 ან რუკის ბმული — ქუჩას OpenStreetMap იპოვის, თავად წერტილს ბოტი არ ინახავს.
+
 <b>მთელი ქალაქი:</b>
 /city ქუთაისი
 
@@ -470,6 +495,12 @@ const ka: Strings = {
   promptStreet: "📍 რომელი ქუჩა დავამატო?",
   promptStreetHint: "უპასუხეთ ამ შეტყობინებას ქუჩის სახელით — ქართულად, ლათინურად ან რუსულად. სხვა ქალაქისთვის: „ბათუმი, რუსთაველი“.",
   streetExample: "პოლიტკოვსკაია",
+  sendLocation: "📍 მდებარეობის გაგზავნა",
+  locationHint: "ან გამოგზავნეთ მდებარეობა 📍 ან რუკის ბმული — ქუჩას OpenStreetMap იპოვის, თავად წერტილს ბოტი არ ინახავს.",
+  locationOutside: "ეს წერტილი საქართველოში არ არის — გამოგზავნეთ სხვა ან დაწერეთ მისამართი.",
+  locationUnknown: "ამ წერტილზე ქუჩა ვერ ვიპოვე — დაწერეთ მისამართი სიტყვებით.",
+  linkUnreadable: "ამ ბმულიდან წერტილი ვერ წავიკითხე — გამოგზავნეთ მდებარეობა 📍 ან დაწერეთ მისამართი.",
+  geoFailed: "რუკის სერვისი ახლა არ პასუხობს — სცადეთ ცოტა მოგვიანებით ან დაწერეთ მისამართი.",
   promptCity: "🏙 რომელი ქალაქი?",
   promptCityHint: "უპასუხეთ ამ შეტყობინებას: მაგალითად, „ბათუმი“.",
   cityExample: "ბათუმი",

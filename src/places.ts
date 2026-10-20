@@ -5,7 +5,7 @@
 // municipality, and a subscription to "Бакуриани, Гоголадзе" becomes the street
 // Gogoladze in Borjomi, in a notice that also names Bakuriani.
 import { streetKeys, toNominative } from "./georgian.ts";
-import { resolveCity, splitStreetDistrict } from "./cities.ts";
+import { resolveCity, resolveDistrict, splitStreetDistrict } from "./cities.ts";
 import type { Outage } from "./types.ts";
 
 export interface Settlement {
@@ -130,4 +130,65 @@ export function parsePlace(
     return { city: defaultCity, street: name, district };
   }
   return { city: city ?? defaultCity, place, street };
+}
+
+const COUNTRY = /^(?:georgia|sakartvelo|грузия|საქართველო)$/i;
+const REGION = new RegExp(
+  [
+    "მხარე|region|область|მუნიციპალიტეტი|municipality|муниципалитет",
+    "imereti|kakheti|adjara|ajara|guria|samegrelo|racha|svaneti|kartli|javakheti|mtianeti",
+    "имерети|кахети|аджари|гури|самегрело|рача|сванети|картли|джавахети|мтианети",
+    "იმერეთ|კახეთ|აჭარ|გური|სამეგრელ|რაჭ|სვანეთ|ქართლ|ჯავახეთ|მთიანეთ",
+  ].join("|"),
+  "i",
+);
+const POSTCODE = /(?:^|\s)\d{4}(?=\s|$)/g;
+/** "37", "№ 37", "д. 12а", "48/2", "N 4" — a house, not a street. */
+const HOUSE = /^(?:№|N|No\.?|д\.|дом|house|კორპ\.?)?\s*\d+[\p{L}]?(?:\s*\/\s*\d+[\p{L}]?)?$/iu;
+/** The same at the end of the street part: "Ilia Chavchavadze Ave 37". */
+const TRAILING_HOUSE = /[\s,]+(?:№|N|No\.?|д\.|дом)?\s*\d+[\p{L}]?(?:\s*\/\s*\d+[\p{L}]?)?$/u;
+const CITY_WORD = /^(?:г\.|город|ქ\.|ქალაქი|city of)\s*/i;
+const STREET_WORD = /(?:^|[\s.])(?:st|street|ave|avenue|lane|road|ул|улица|пр|проспект|пер|переулок|шоссе)(?=[\s.]|$)|ქ\.|ქუჩ|გამზ|შეს|ჩიხ/iu;
+
+/**
+ * An address copied from a maps app or a contact card — "Ilia Chavchavadze
+ * Ave 37, Tbilisi 0179, Georgia", "Грузия, Тбилиси, проспект Ильи
+ * Чавчавадзе, 37", "ილია ჭავჭავაძის გამზ. 37, თბილისი 0179" — rewritten as the
+ * bot reads addresses: "Tbilisi, Ilia Chavchavadze Ave". Undefined for what is
+ * not such an address, so "Политковская, Мтацминда" goes on as typed.
+ */
+export function fromFullAddress(
+  text: string,
+  known: string[],
+  isSettlement: (name: string) => boolean = () => false,
+): string | undefined {
+  const raw = text.split(",").map((p) => p.trim()).filter(Boolean);
+  const country = raw.some((p) => COUNTRY.test(p));
+  const postcode = new RegExp(POSTCODE.source).test(text);
+  const houses = raw.some((p) => HOUSE.test(p)) || raw.some((p) => TRAILING_HOUSE.test(p) && /\p{L}{3}/u.test(p));
+  if (!country && !postcode && !houses) return undefined;
+
+  const parts = raw
+    .filter((p) => !COUNTRY.test(p) && !REGION.test(p) && !HOUSE.test(p))
+    .map((p) => p.replace(POSTCODE, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  let city: string | undefined;
+  const rest: string[] = [];
+  for (const p of parts) {
+    const asCity = !city ? resolveCity(p.replace(CITY_WORD, ""), known) : undefined;
+    if (asCity) city = p.replace(CITY_WORD, "");
+    else rest.push(p.replace(TRAILING_HOUSE, "").trim());
+  }
+  // The street is the part with a street word, or else the first one left.
+  const street = rest.find((p) => STREET_WORD.test(p)) ?? rest[0];
+  if (!street) return city;
+  const others = rest.filter((p) => p !== street);
+  const district = others.find((p) => resolveDistrict(p));
+  // A settlement the bot knows, named with or without its town:
+  // "Merab Kostava St 15/1, Bakuriani 1200, Georgia".
+  const settlement = others.find((p) => p !== district && isSettlement(p));
+  if (settlement) return [city, settlement, street].filter(Boolean).join(", ");
+  // Tbilisi: "street, district", the way the bot reads a district.
+  if (!city || resolveCity(city, known) === "თბილისი") return [street, district].filter(Boolean).join(", ");
+  return `${city}, ${street}`;
 }
