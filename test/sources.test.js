@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseGwp, gwpTimes, gwpDate } from "../src/sources/gwp.ts";
 import { parseTelasi, telasiEta } from "../src/sources/telasi.ts";
-import { parseEnergo, parseSocar, parseUwsc, energoPlace } from "../src/sources/regions.ts";
+import { parseEnergo, parseSocar, parseUwsc, energoPlace, socarPlace } from "../src/sources/regions.ts";
+import { KNOWN_CITIES } from "../src/cities.ts";
+import { streetSub, matchOutage } from "../src/match.ts";
+import { renderOutage } from "../src/render.ts";
 import { teLinks, parseTeArticle } from "../src/sources/te.ts";
 import { districtsOf } from "../src/sources/common.ts";
 import { tbilisiEpoch, fmtRange } from "../src/time.ts";
@@ -77,6 +80,50 @@ test("SOCAR: municipality before the colon, places after", () => {
   assert.deepEqual(o.addresses, ["სოფ. ნუკრიანი"]);
   assert.equal(fmtRange(o.start, o.end), "09.10 11:00 – 16:00");
   assert.equal(o.emergency, false);
+});
+
+test("SOCAR: the place is read without a colon, and from the notice when the title has none", () => {
+  const place = (title, description = "") => {
+    const { city, places, whole } = socarPlace(title, description);
+    return [city, places, whole];
+  };
+  assert.deepEqual(place("ჭიათურა ბათუმის ქუჩა"), ["ჭიათურა", "ბათუმის ქუჩა", false]);
+  assert.deepEqual(place("ქუთაისი- თამარ მეფის 10-12"), ["ქუთაისი", "თამარ მეფის 10-12", false]);
+  assert.deepEqual(place("გურჯაანი; სოფ. კაჭრეთი"), ["გურჯაანი", "სოფ. კაჭრეთი", false]);
+  assert.deepEqual(place("ხელვაჩაური-სოფ. ზედა ჯოჭო"), ["ხელვაჩაური", "სოფ. ზედა ჯოჭო", false]);
+  assert.deepEqual(
+    place("დაბა ჩაქვი. ხუსეინ ბეჟანიძის ქუჩა", "22 ოქტომბრის 12:00 საათიდან ქობულეთის მუნიციპალიტეტში დაბა ჩაქვში"),
+    ["ქობულეთი", "დაბა ჩაქვი. ხუსეინ ბეჟანიძის ქუჩა", false],
+  );
+  assert.deepEqual(
+    place("დაბა კოჯორი : ექვთიმე თაყაიშვილის ქუჩა", "ავარიული დაზიანების გამო თბილისის მუნიციპალიტეტში"),
+    ["თბილისი", "დაბა კოჯორი, ექვთიმე თაყაიშვილის ქუჩა", false],
+  );
+  assert.deepEqual(place("ადიგენის მუნიციპალიტეტი:   სოფლები - სარო, თოკი."), ["ადიგენი", "სარო, თოკი", false]);
+  // SOCAR's own text names the wrong municipality here; the title wins.
+  assert.deepEqual(
+    place("სიღნაღის მუნიციპალიტეტი სრულად", "დედოფლისწყაროს მუნიციპალიტეტში ქალაქ სიღნაღსა"),
+    ["სიღნაღი", "", true],
+  );
+});
+
+test("SOCAR: every notice of 20 October has its real municipality and its places", () => {
+  const list = parseSocar(fixture("socar-2026-10-20.json"));
+  assert.equal(list.length, 50);
+  for (const o of list) {
+    assert.ok(KNOWN_CITIES.includes(o.city), `${o.city} ⟵ ${o.title}`);
+    assert.ok(o.addresses.length > 0 || o.wholeCity, o.title);
+  }
+});
+
+test("SOCAR: a whole municipality reaches every street followed there", () => {
+  const sighnaghi = parseSocar(fixture("socar-2026-10-20.json")).find((o) => o.wholeCity && o.city === "სიღნაღი");
+  const subs = [
+    { id: 1, chatId: 10, ...streetSub("Руставели", "სიღნაღი") },
+    { id: 2, chatId: 20, ...streetSub("Руставели", "გურჯაანი") },
+  ];
+  assert.deepEqual([...matchOutage(sighnaghi, subs, () => ["gas"]).keys()], [10]);
+  assert.match(renderOutage(sighnaghi, [subs[0]]), /Отключение на весь муниципалитет, в том числе <b>Руставели<\/b>/);
 });
 
 test("UWSC: times out of the excerpt, town stripped from each address", () => {

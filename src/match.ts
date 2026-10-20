@@ -72,7 +72,7 @@ export function matchOutage(
       if (sub.kind === "road") continue;
     } else if (sub.kind === "street" || sub.kind === "road") {
       sk ??= skeletonize(text);
-      if (findKeys(text, sub.keys, sk).length === 0 && !inCutDistrict(o, sub)) continue;
+      if (!o.wholeCity && findKeys(text, sub.keys, sk).length === 0 && !inCutDistrict(o, sub)) continue;
     }
     const list = out.get(sub.chatId) ?? [];
     list.push(sub);

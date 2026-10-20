@@ -14,7 +14,21 @@ export const KNOWN_CITIES = [
   "გურჯაანი", "ყვარელი", "სიღნაღი", "ახმეტა", "ლაგოდეხი", "დუშეთი", "წყალტუბო",
   "ტყიბული", "ბაკურიანი", "ახალქალაქი", "ნინოწმინდა", "წალკა", "თეთრიწყარო",
   "ბოლნისი", "დმანისი", "ხობი", "მესტია", "ამბროლაური", "ონი", "ლანჩხუთი", "ხონი",
+  // The rest of the municipalities, so a notice that names one is understood.
+  "ხელვაჩაური", "ქედა", "შუახევი", "ხულო", "ჩოხატაური", "ბაღდათი", "ვანი", "თერჯოლა",
+  "საჩხერე", "ხარაგაული", "დედოფლისწყარო", "თიანეთი", "ყაზბეგი", "ლენტეხი", "ცაგერი",
+  "აბაშა", "მარტვილი", "ჩხოროწყუ", "წალენჯიხა", "ადიგენი", "ასპინძა", "ქარელი",
 ];
+
+/** "ჭიათურა" → "ჭიათურის", "თეთრიწყარო" → "თეთრიწყაროს": as in "…ის მუნიციპალიტეტში". */
+function genitive(city: string): string {
+  return /[ია]$/.test(city) ? `${city.slice(0, -1)}ის` : `${city}ს`;
+}
+
+/** The municipality a genitive names, "ქობულეთის" → "ქობულეთი". */
+export function cityOfGenitive(word: string): string | undefined {
+  return KNOWN_CITIES.find((c) => genitive(c) === word);
+}
 
 /** The known city a typed name refers to, by skeleton, or undefined. */
 export function resolveCity(typed: string, known: string[]): string | undefined {

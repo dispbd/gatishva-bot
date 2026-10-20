@@ -384,8 +384,10 @@ export class Hub extends DurableObject<Env> {
       }
       if (prev.fp === fp && prev.finished_at === null) continue;
       this.sql.exec(
-        `UPDATE events SET fp = ?, data = ?, current_until = ? WHERE key = ?`,
-        fp, JSON.stringify(o), currentUntil(o, source.live(o.key)), o.key,
+        // The city too: a parser that learns to read a place better moves the
+        // outage to its real city, and /now and knownCities read the column.
+        `UPDATE events SET fp = ?, data = ?, city = ?, current_until = ? WHERE key = ?`,
+        fp, JSON.stringify(o), o.city, currentUntil(o, source.live(o.key)), o.key,
       );
       this.learnDistricts(o, subs);
       if (source.name !== REPORTS.name) this.confirmSignals(o, now);

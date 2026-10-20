@@ -37,6 +37,11 @@ export interface Outage {
    */
   wholeDistricts?: boolean;
   /**
+   * The notice cuts the whole municipality, "სიღნაღის მუნიციპალიტეტი სრულად":
+   * every street followed there is concerned.
+   */
+  wholeCity?: boolean;
+  /**
    * What the header names instead of city and district, Georgian: a road and
    * its section, "ვაზიანი-გომბორი-თელავი, 26-ე კმ".
    */

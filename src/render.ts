@@ -117,11 +117,11 @@ export function renderOutage(o: Outage, subs: Sub[], state: RenderState = {}): s
   if (streetSubs.length) {
     if (mine.length) {
       head.push(`📍 ${mine.map((a) => `<b>${escapeHtml(addressLocal(a, lang))}</b>`).join(", ")}`);
-    } else if (o.wholeDistricts) {
+    } else if (o.wholeDistricts || o.wholeCity) {
       // Matched by district, not by name: say so, or the reader looks for
       // their street in a notice that has none.
       const labels = streetSubs.map((s) => `<b>${escapeHtml(s.label)}</b>`).join(", ");
-      head.push(S.wholeDistrict(labels));
+      head.push(o.wholeCity ? S.wholeCity(labels) : S.wholeDistrict(labels));
     } else {
       head.push(`📍 ${streetSubs.map((s) => `<b>${escapeHtml(s.label)}</b>`).join(", ")}`);
     }
