@@ -45,6 +45,20 @@ export function citySub(city: string): Omit<Sub, "id" | "chatId"> {
   return { kind: "city", city: citySkel(city), label: city.trim(), keys: [] };
 }
 
+/**
+ * The municipalities in a compound service centre, "შუახევი-ქედა",
+ * "ახალქალაქი/ნინოწმინდა", as city skeletons; empty for a plain city.
+ */
+export function cityParts(city: string): string[] {
+  const parts = city.split(/\s*[-/]\s*/).filter(Boolean);
+  return parts.length > 1 ? parts.map(citySkel) : [];
+}
+
+/** "shuahevi" → "shuahev", so "შუახევის" is found too. */
+function stemOf(cityKey: string): string {
+  return cityKey.length > 4 && /[aeiou]$/.test(cityKey) ? cityKey.slice(0, -1) : cityKey;
+}
+
 /** The text a subscription is matched against: headline and body together. */
 export function haystack(o: Outage): string {
   return o.title && !o.text.includes(o.title) ? `${o.title}\n${o.text}` : o.text;
@@ -61,10 +75,17 @@ export function matchOutage(
 ): Map<number, Sub[]> {
   const out = new Map<number, Sub[]>();
   const city = citySkel(o.city);
+  const parts = cityParts(o.city);
   const text = haystack(o);
   let sk: ReturnType<typeof skeletonize> | undefined;
   for (const sub of subs) {
-    if (sub.city !== city) continue;
+    if (sub.city !== city) {
+      // Energo's service centre "შუახევი-ქედა" serves two municipalities: a
+      // notice of it is Shuakhevi's when its places name Shuakhevi. Not its
+      // text, which starts with the centre's name and so names both.
+      if (!parts.includes(sub.city)) continue;
+      if (findKeys(o.addresses.join("\n"), [stemOf(sub.city)]).length === 0) continue;
+    }
     if (!wanted(o.utility, utilitiesOf(sub.chatId))) continue;
     // A weather warning covers the whole municipality: anyone following a
     // street or the city there gets it, no street matching needed.

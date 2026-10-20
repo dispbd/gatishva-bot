@@ -13,7 +13,7 @@
 // The flow on every alarm:  poll due sources → diff → outbox → drain → re-arm.
 import { DurableObject } from "cloudflare:workers";
 import { SOURCES, sourceByName } from "./sources/index.ts";
-import { matchOutage, streetSub, citySub, roadSub, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
+import { matchOutage, cityParts, streetSub, citySub, roadSub, citySkel, learnedDistrict, DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
 import { renderOutage, UTILITY_ICON } from "./render.ts";
 import { fingerprint, isCurrent, currentUntil, sha256, median, MISSES_TO_FINISH, UNTIL_FINISHED } from "./diff.ts";
@@ -943,7 +943,7 @@ export class Hub extends DurableObject<Env> {
       `SELECT DISTINCT city FROM events WHERE current_until > ? AND finished_at IS NULL`, now,
     )
       .map((r) => r.city)
-      .filter((c) => subCities.has(citySkel(c)));
+      .filter((c) => subCities.has(citySkel(c)) || cityParts(c).some((p) => subCities.has(p)));
     if (cities.length === 0) return 0;
     const rows = this.rows<EventRow>(
       `SELECT * FROM events WHERE current_until > ? AND finished_at IS NULL
@@ -953,7 +953,8 @@ export class Hub extends DurableObject<Env> {
     // A city subscription covers every outage in its city, so streets there
     // need no matching — which is the expensive part.
     const wholeCities = new Set(subs.filter((s) => s.kind === "city").map((s) => s.city));
-    const streets = subs.filter((s) => s.kind === "street");
+    // Cities too: in a compound service centre a city is matched by its name.
+    const streets = subs.filter((s) => s.kind !== "road");
     const utilities = utilitiesOf(chatId);
     const reportsOn = this.reportsOn(chatId);
     for (const ev of rows) {
