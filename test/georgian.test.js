@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { streetKeys, findKeys, addressRu, splitAddresses, translitRu, skel } from "../src/georgian.ts";
+import { streetKeys, findKeys, addressRu, addressLocal, splitAddresses, translitRu, skel } from "../src/georgian.ts";
 
 const found = (text, query) => findKeys(text, streetKeys(query)).map(([a, b]) => text.slice(a, b));
 
@@ -94,4 +94,53 @@ test("a name that drops a vowel before its ending gets it back", () => {
   assert.equal(addressRu("წერეთლის 6, 10, 12"), "Церетели 6, 10, 12");
   assert.equal(addressRu("ვახტანგ გორგასლის ქ."), "ул. Вахтанг Горгасали");
   assert.equal(addressRu("დავით აღმაშენებლის გამზ."), "пр. Давит Агмашенебели");
+});
+
+// Addresses as the providers wrote them on 20 October 2026.
+
+test("a path of places is translated part by part, the street word with its street", () => {
+  assert.equal(addressRu("ყვარელი, ილ.ჭავჭავაძეს ქუჩა"), "Кварели, ул. Ил. Чавчавадзе");
+  assert.equal(addressRu("მესტია, მესტია, ბ.კახიანის ქ"), "Местия, ул. Б. Кахиани"); // the town once
+  assert.equal(addressRu("დაბა ახალდაბა. ყაზბეგის ქ"), "пос. Ахалдаба, ул. Казбеги");
+  assert.equal(addressRu("შუახევი, შუახევი, თამარ მეფის ქ.№14"), "Шуахеви, ул. Тамар Мепи №14");
+  assert.equal(addressRu("ბათუმის 25, 38"), "Батуми 25, 38"); // house numbers stay with their street
+});
+
+test("a Tbilisi suburb in front is a qualifier, and Telasi's abbreviations are spelled out", () => {
+  assert.equal(addressRu("(სოფ.ახალდაბა)იეთიმ გურჯის ქ"), "ул. Иетим Гурджи (с. Ахалдаба)");
+  assert.equal(addressRu("(წყნ)ახალდაბის ქ"), "ул. Ахалдаби (Цкнети)");
+  assert.equal(addressRu("გრიგოლ ლორთქიფანიძის ქ.(სამგ)"), "ул. Григол Лорткипанидзе (Самгори)");
+  assert.equal(addressRu("სოფ.ახალდაბა(მე-2ჩიხი)"), "с. Ахалдаба (2-й туп.)");
+  assert.equal(addressLocal("სოფ.ახალდაბა(მე-2ჩიხი)", "en"), "Village Akhaldaba (2nd Dead End)");
+  // The closing parenthesis used to be lost.
+  assert.equal(addressRu("მარჯვენა სანაპირო(9 მარტის მიმდებარე ტერიტორია)"), "Марджвена Санапиро (9 марта окрестности терр.)");
+});
+
+test("a village and a street in one part become two", () => {
+  assert.equal(addressRu("ქ თბილისი, სოფელი დიღომი დიდგორის ქუჩა"), "г. Тбилиси, с. Дигоми, ул. Дидгори");
+  assert.equal(addressRu("ს. ნუკრიანი წმინდა ნინოს ქ."), "с. Нукриани, ул. Цминда Нино");
+  assert.equal(addressRu("ს. ნოჯიხევი 2 ქ."), "с. Ноджихеви, ул. 2");
+  assert.equal(addressRu("ს. ქვემო ქვალონი"), "с. Квемо Квалони");
+  assert.equal(addressRu("სოფ. ჭოგნარის ნაწილი"), "с. Чогнари (частично)");
+  assert.equal(addressRu("მარნეული, სამხედრო ნაწილი"), "Марнеули, Самхедро Нацили"); // a military unit
+});
+
+test("ს. is a village, or an initial before a person's name", () => {
+  assert.equal(addressRu("შუახევი, შუახევი, ს. ხიმშიაშვილის ქ №9"), "Шуахеви, ул. С. Химшиашвили №9");
+  assert.equal(addressRu("ს. ბია"), "с. Бия");
+});
+
+test("ქ is the town before the first place, the street anywhere else", () => {
+  assert.equal(addressRu("ქ თბილისი, სოფელი დიღომი"), "г. Тбилиси, с. Дигоми");
+  assert.equal(addressRu("ზესტაფონი, ქ. წამებულის"), "Зестапони, ул. Цамебули");
+});
+
+test("settlements, quarters, dates and ordinals", () => {
+  assert.equal(addressRu("დაბა კულაში"), "пос. Кулаши");
+  assert.equal(addressRu("(წყნ)დაბა"), "Даба (Цкнети)"); // a quarter called Daba
+  assert.equal(addressRu("ცაიში, ჯუმის უბანი"), "Цайши, Джуми квартал");
+  assert.equal(addressRu("ბორჯომი, ბაკურიანი, 9 აპრილის ქუჩა"), "Борджоми, Бакуриани, ул. 9 апреля");
+  assert.equal(addressRu("რუსთავი, მე-16"), "Рустави, 16-й");
+  assert.equal(addressRu("ჭიხარულა"), "Чихарула"); // not a dead end, ჩიხი
+  assert.equal(addressRu("ბორჯომი, ბაკურიანი, რაიმონდ (გურამ) გოგოლაძის"), "Борджоми, Бакуриани, Раймонд (Гурам) Гоголадзе");
 });
