@@ -147,6 +147,11 @@ const POSTCODE = /(?:^|\s)\d{4}(?=\s|$)/g;
 const HOUSE = /^(?:№|N|No\.?|д\.|дом|house|კორპ\.?)?\s*\d+[\p{L}]?(?:\s*\/\s*\d+[\p{L}]?)?$/iu;
 /** The same at the end of the street part: "Ilia Chavchavadze Ave 37". */
 const TRAILING_HOUSE = /[\s,]+(?:№|N|No\.?|д\.|дом)?\s*\d+[\p{L}]?(?:\s*\/\s*\d+[\p{L}]?)?$/u;
+/**
+ * The house in front, Google's way: "19A Pavle Ingorokva St". Not a date that
+ * names the street, "9 April St", "26 мая".
+ */
+const LEADING_HOUSE = /^(?:№\s*)?\d+[\p{L}]?(?:\s*\/\s*\d+[\p{L}]?)?\s+(?!(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр|იანვ|თებ|მარტ|აპრ|მაის|ივნ|ივლ|აგვ|სექტ|ოქტ|ნოემ|დეკ))(?=\p{L})/iu;
 const CITY_WORD = /^(?:г\.|город|ქ\.|ქალაქი|city of)\s*/i;
 const STREET_WORD = /(?:^|[\s.])(?:st|street|ave|avenue|lane|road|ул|улица|пр|проспект|пер|переулок|шоссе)(?=[\s.]|$)|ქ\.|ქუჩ|გამზ|შეს|ჩიხ/iu;
 
@@ -177,7 +182,7 @@ export function fromFullAddress(
   for (const p of parts) {
     const asCity = !city ? resolveCity(p.replace(CITY_WORD, ""), known) : undefined;
     if (asCity) city = p.replace(CITY_WORD, "");
-    else rest.push(p.replace(TRAILING_HOUSE, "").trim());
+    else rest.push(p.replace(TRAILING_HOUSE, "").replace(LEADING_HOUSE, "").trim());
   }
   // The street is the part with a street word, or else the first one left.
   const street = rest.find((p) => STREET_WORD.test(p)) ?? rest[0];
