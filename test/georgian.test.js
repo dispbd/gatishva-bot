@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { streetKeys, findKeys, addressRu, addressLocal, splitAddresses, translitRu, skel } from "../src/georgian.ts";
+import { streetKeys, findKeys, syncopated, addressRu, addressLocal, splitAddresses, translitRu, skel } from "../src/georgian.ts";
 
 const found = (text, query) => findKeys(text, streetKeys(query)).map(([a, b]) => text.slice(a, b));
 
@@ -143,4 +143,38 @@ test("settlements, quarters, dates and ordinals", () => {
   assert.equal(addressRu("რუსთავი, მე-16"), "Рустави, 16-й");
   assert.equal(addressRu("ჭიხარულა"), "Чихарула"); // not a dead end, ჩიხი
   assert.equal(addressRu("ბორჯომი, ბაკურიანი, რაიმონდ (გურამ) გოგოლაძის"), "Борджоми, Бакуриани, Раймонд (Гурам) Гоголадзе");
+});
+
+// Names that lose a vowel before the case ending, as Telasi, Energo and SOCAR
+// wrote them on 20 October 2026.
+
+test("a street is found when its name drops a vowel before the ending", () => {
+  assert.deepEqual(found("ვაზისუბნის IV მიკრორაიონის III კვარტლის", "Вазисубани"), ["ვაზისუბნის"]);
+  assert.deepEqual(found("დიღმის მასივის 1 კვარტალს", "Дигоми"), ["დიღმის"]);
+  assert.deepEqual(found("კოტე აფხაზის ტაბახმელა, კოჯრის გზ.", "Коджори"), ["კოჯრის"]);
+  assert.deepEqual(found("მარნეული, წერეთლის", "Церетели"), ["წერეთლის"]);
+  assert.deepEqual(found("ვახტანგ გორგასლის, პატარა კახის", "Gorgasali"), ["გორგასლის"]);
+  assert.deepEqual(found("სოფელი დიღომი/დავით აღმაშენებლის", "Давид Агмашенебели"), ["აღმაშენებლის"]);
+  // Both spellings in one Telasi list, the second glued to the next word.
+  assert.deepEqual(found("ვაზისუბანის, დავითაიას, ვაზისუბნისდასხლებას", "ვაზისუბანი"), [
+    "ვაზისუბანის",
+    "ვაზისუბნისდასხლებას",
+  ]);
+});
+
+test("the shorter spelling counts only before a case ending", () => {
+  // "maran" without its vowel begins Marneuli, "muhur" Mukhrani, "sakar" a council.
+  assert.deepEqual(found("მარნეული, წერეთლის", "Марани"), []);
+  assert.deepEqual(found("მუხრანი, მუხრანის", "Мухури"), []);
+  assert.deepEqual(found("საკრებულოების შენობა", "Сакара"), []);
+  assert.deepEqual(found("ვაზისუბნ", "Вазисубани"), []);
+});
+
+test("the stored keys stay as they were: the shorter spelling is derived when matching", () => {
+  assert.deepEqual(streetKeys("Вазисубани"), ["vazisuban"]);
+  assert.equal(syncopated("vazisuban"), "vazisubn");
+  assert.equal(syncopated("ceretel"), "ceretl");
+  assert.equal(syncopated("chavchavadz"), undefined);
+  assert.equal(syncopated("kojor"), "kojr");
+  assert.equal(syncopated("ian"), undefined); // too short to stand alone
 });
