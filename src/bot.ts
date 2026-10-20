@@ -12,7 +12,7 @@ import { hub } from "./hub-do.ts";
 import type { ChatInfo, AddResult, ReportResult } from "./hub-do.ts";
 import { tg, describe, escapeHtml } from "./telegram.ts";
 import type { TgUpdate, TgMessage, TgCallbackQuery, TgUser } from "./telegram.ts";
-import { splitCityStreet, splitStreetDistrict, resolveCity, KNOWN_CITIES } from "./cities.ts";
+import { splitCityStreet, resolveCity, KNOWN_CITIES } from "./cities.ts";
 import { translit, addressLocal, skel } from "./georgian.ts";
 import { DEFAULT_CITY } from "./match.ts";
 import type { Sub } from "./match.ts";
@@ -153,12 +153,9 @@ async function askCity(env: Env, chatId: number, lang: Lang, from?: TgUser): Pro
 
 async function addStreet(env: Env, m: TgMessage, text: string, lang: Lang): Promise<void> {
   if (!(await mayEdit(env, m))) return await send(env, m.chat.id, t(lang).notAdmin);
-  const h = hub(env);
-  const { city, street } = splitCityStreet(text, await h.knownCities());
-  // "Политковская, Мтацминда": districts are only known for Tbilisi.
-  const { street: name, district } = city ? { street, district: undefined } : splitStreetDistrict(street);
-  const r = await h.addStreet(chatOf(m.chat), name, city ?? DEFAULT_CITY, district);
-  await send(env, m.chat.id, confirmation(r, city ?? DEFAULT_CITY, lang));
+  // The Hub reads the place: city, village, street, district (src/places.ts).
+  const r = await hub(env).addPlace(chatOf(m.chat), text);
+  await send(env, m.chat.id, confirmation(r, r.city ?? DEFAULT_CITY, lang));
 }
 
 async function addCity(env: Env, m: TgMessage, text: string, lang: Lang): Promise<void> {
@@ -236,7 +233,7 @@ function confirmation(r: AddResult, city: string, lang: Lang): string {
   } else if (r.sub.kind === "street") {
     lines.push(S.notSeenYet);
   }
-  if (r.sub.kind === "street" && city === DEFAULT_CITY) {
+  if (r.sub.kind === "street" && city === DEFAULT_CITY && !r.place) {
     // A fault that cuts a whole district names no streets; the district is
     // how such a notice finds this subscription, so say whether it is known.
     lines.push(

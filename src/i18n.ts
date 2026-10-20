@@ -185,6 +185,9 @@ const ru: Strings = {
 <b>В другом городе:</b>
 /add Батуми, Руставели
 
+<b>В селе или посёлке</b> — достаточно его названия, с улицей или без:
+/add Бакуриани, Гоголадзе
+
 <b>На весь город:</b>
 /city Кутаиси
 
@@ -296,6 +299,9 @@ const en: Strings = {
 
 <b>In another city:</b>
 /add Batumi, Rustaveli
+
+<b>In a village or small town</b> — its name will do, with a street or without:
+/add Bakuriani, Gogoladze
 
 <b>A whole city:</b>
 /city Kutaisi
@@ -409,6 +415,9 @@ const ka: Strings = {
 
 <b>სხვა ქალაქში:</b>
 /add ბათუმი, რუსთაველი
+
+<b>სოფელში ან დაბაში</b> — საკმარისია მისი სახელი, ქუჩით ან მის გარეშე:
+/add ბაკურიანი, გოგოლაძე
 
 <b>მთელი ქალაქი:</b>
 /city ქუთაისი

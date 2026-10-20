@@ -12,7 +12,7 @@ export const KNOWN_CITIES = [
   "ხაშური", "სამტრედია", "სენაკი", "ზესტაფონი", "მარნეული", "თელავი", "ახალციხე",
   "ოზურგეთი", "კასპი", "ჭიათურა", "გარდაბანი", "ბორჯომი", "საგარეჯო", "მცხეთა",
   "გურჯაანი", "ყვარელი", "სიღნაღი", "ახმეტა", "ლაგოდეხი", "დუშეთი", "წყალტუბო",
-  "ტყიბული", "ბაკურიანი", "ახალქალაქი", "ნინოწმინდა", "წალკა", "თეთრიწყარო",
+  "ტყიბული", "ახალქალაქი", "ნინოწმინდა", "წალკა", "თეთრიწყარო",
   "ბოლნისი", "დმანისი", "ხობი", "მესტია", "ამბროლაური", "ონი", "ლანჩხუთი", "ხონი",
   // The rest of the municipalities, so a notice that names one is understood.
   "ხელვაჩაური", "ქედა", "შუახევი", "ხულო", "ჩოხატაური", "ბაღდათი", "ვანი", "თერჯოლა",
@@ -30,11 +30,23 @@ export function cityOfGenitive(word: string): string | undefined {
   return KNOWN_CITIES.find((c) => genitive(c) === word);
 }
 
+/**
+ * Names whose usual Russian spelling is not a transliteration — ჯ written as
+ * "ж", ღ as "х" — so no skeleton finds them.
+ */
+const CITY_ALIASES: [string, string][] = [
+  ["Боржоми", "ბორჯომი"], ["Сигнахи", "სიღნაღი"], ["Цхалтубо", "წყალტუბო"], ["Местиа", "მესტია"],
+];
+
 /** The known city a typed name refers to, by skeleton, or undefined. */
 export function resolveCity(typed: string, known: string[]): string | undefined {
   const k = skel(typed);
   if (k.length < 3) return undefined;
-  const all = [...new Set([...known, ...KNOWN_CITIES])];
+  const alias = CITY_ALIASES.find(([a]) => skel(a) === k);
+  if (alias) return alias[1];
+  // The municipalities first: Energo's "შუახევი-ქედა" is a service centre,
+  // and the subscriber means შუახევი (see cityParts in src/match.ts).
+  const all = [...new Set([...KNOWN_CITIES, ...known])];
   return all.find((c) => skel(c) === k) ?? all.find((c) => skel(c).startsWith(k) && k.length >= 4);
 }
 
