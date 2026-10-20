@@ -324,6 +324,7 @@ const TYPE_WORDS: { prefix: string; ru: string; en: string; lead?: boolean; enLe
   { prefix: "kuch", ru: "ул.", en: "St.", lead: true },
   { prefix: "gamz", ru: "пр.", en: "Ave.", lead: true },
   { prefix: "shesahvev", ru: "пер.", en: "Lane" },
+  { prefix: "shes", ru: "пер.", en: "Lane", exact: true }, // "შეს." in Telasi's live lists
   { prefix: "chih", ru: "туп.", en: "Dead End" },
   { prefix: "kvartl", ru: "кв.", en: "Block" },
   { prefix: "kvartal", ru: "кв.", en: "Block" },

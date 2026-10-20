@@ -72,10 +72,23 @@ function liveItem(i: ApiItem): Outage[] {
       end: parseLocal(i.poweron_time),
       title: squash(i.full_title ?? i.title ?? ""),
       text,
-      addresses: telasiAddresses(text),
+      addresses: liveAddresses(text),
       url: `${PAGE}?outage=${encodeURIComponent(String(id))}`,
     }),
   ];
+}
+
+/**
+ * A live outage's text is usually the bare street list, "აბაკელიას ქ.,ცხემის
+ * შეს.,...,რუსთაველის გამზ." (October 2026), with no "ქუჩებს:" to find it by.
+ * A sentence naming districts only is not a list: its parts are long, or it
+ * has the colon the notices' own wording uses.
+ */
+function liveAddresses(text: string): string[] {
+  const listed = telasiAddresses(text);
+  if (listed.length || text.includes(":")) return listed;
+  const parts = splitAddresses(text);
+  return parts.every((p) => p.length <= 60) ? parts : [];
 }
 
 /**

@@ -58,6 +58,9 @@ test("addresses read like Russian addresses", () => {
 
 test("a Roman numeral glued to its word is split off", () => {
   assert.equal(addressRu("ილია ბახტაძის Iშესახვევის"), "Илия Бахтадзе I пер.");
+  // Telasi's live lists shorten the lane to "შეს.".
+  assert.equal(addressRu("ცხემის შეს"), "Цхеми пер.");
+  assert.equal(addressRu("შატბერაშვილის III შეს"), "Шатберашвили III пер.");
 });
 
 test("an enumeration splits on commas and the final 'and'", () => {
