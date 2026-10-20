@@ -156,7 +156,9 @@ export const MIN_KEY = 4;
  * For several words the longest one is offered too, because the texts often
  * name a street by surname alone: "Ильи Чавчавадзе" must still find
  * "ჭავჭავაძის". Each key loses a trailing vowel — the nominative ending that
- * Georgian replaces with its case endings (ჭავჭავაძე → ჭავჭავაძის).
+ * Georgian replaces with its case endings (ჭავჭავაძე → ჭავჭავაძის). A name
+ * that also loses a vowel inside, ვაზისუბანი → ვაზისუბნის, is handled by
+ * findKeys, not here: these keys are stored with each subscription.
  */
 export function streetKeys(query: string): string[] {
   const words = query.split(/[\s,.;:()]+/).filter((w) => w && !isTypeWord(w));
@@ -175,22 +177,57 @@ export function streetKeys(query: string): string[] {
 export type Span = [number, number];
 
 /**
+ * Many Georgian names lose their last vowel before a case ending that starts
+ * with a vowel: ვაზისუბანი → ვაზისუბნის, წერეთელი → წერეთლის, დიღომი →
+ * დიღმის, კოჯორი → კოჯრის. A key that ends in a consonant, a vowel and l, m, n
+ * or r is therefore also looked for without that vowel: "vazisuban" →
+ * "vazisubn". Derived here, at match time, so subscriptions stored long ago
+ * catch these forms too without their keys being rewritten.
+ */
+const SYNCOPE_KEY = /^(.*[^aeiou])[aeo]([lmnr])$/;
+
+export function syncopated(key: string): string | undefined {
+  const m = SYNCOPE_KEY.exec(key);
+  return m && m[1]!.length + 1 >= MIN_KEY ? m[1]! + m[2]! : undefined;
+}
+
+/**
+ * What must follow a syncopated key in its word: a case ending, and nothing
+ * else — the instrumental -ით, -იდან, the adverbial -ად, -ამდე, a plural -ებ-.
+ * Without this "maran" would find მარნეული, "muhur" მუხრანი and "sakar"
+ * საკრებულოს — other words entirely. Only the genitive -ის, the case street
+ * names are given in, may run on, because Telasi glues the next word to it:
+ * "ვაზისუბნისდასხლებას".
+ */
+const AFTER_SYNCOPE = /^(?:is.*|ita?|idan|ada?|amde|eb(?:i|is|it|idan|shi|ze|ma|s|ad))$/;
+
+/**
  * Where in `text` any of `keys` occurs at the start of a word, as spans of the
  * original text widened to whole words — so the highlight covers "ჭავჭავაძის",
  * case ending and all, not just the part that matched.
  */
 export function findKeys(text: string, keys: string[], sk: Skeleton = skeletonize(text)): Span[] {
   const spans: Span[] = [];
-  for (const key of keys) {
-    if (!key) continue;
+  const search = (key: string, syncope: boolean) => {
     for (let at = sk.s.indexOf(key); at !== -1; at = sk.s.indexOf(key, at + 1)) {
       if (!sk.starts[at]) continue;
+      if (syncope) {
+        let wordEnd = at + key.length;
+        while (wordEnd < sk.s.length && !sk.starts[wordEnd]) wordEnd++;
+        if (!AFTER_SYNCOPE.test(sk.s.slice(at + key.length, wordEnd))) continue;
+      }
       let start = sk.map[at]!;
       let end = sk.map[at + key.length - 1]! + 1;
       while (start > 0 && isLetter(text[start - 1])) start--;
       while (end < text.length && isLetter(text[end])) end++;
       spans.push([start, end]);
     }
+  };
+  for (const key of keys) {
+    if (!key) continue;
+    search(key, false);
+    const short = syncopated(key);
+    if (short) search(short, true);
   }
   return mergeSpans(spans);
 }

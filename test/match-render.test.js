@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { parseGwp } from "../src/sources/gwp.ts";
 import { parseTelasi } from "../src/sources/telasi.ts";
-import { matchOutage, streetSub, citySub } from "../src/match.ts";
+import { matchOutage, streetSub, citySub, fromStoredKeys } from "../src/match.ts";
+import { parseSocar } from "../src/sources/regions.ts";
 import { renderOutage, reasonOf, visibleLength } from "../src/render.ts";
 import { isCurrent } from "../src/diff.ts";
 import { splitCityStreet, resolveCity } from "../src/cities.ts";
@@ -86,4 +87,19 @@ test("a notice for several districts names them all in the header", () => {
   const [o] = parseTelasi(fixture("telasi-5919.json"), NOW);
   const html = renderOutage(o, []);
   assert.equal(html.split("\n")[0], "💡 <b>Свет · Тбилиси, Сололак-Мтацминда-Крцаниси и Исани</b>");
+});
+
+test("a subscription stored before syncope matching finds the name without its vowel", () => {
+  // Telasi, 7 October: "დიღმის მასივის 1 კვარტალს" — Digomi, in the genitive.
+  const digomi = telasi.find((o) => o.key === "telasi:5910");
+  // A row as the subs table holds it: the keys JSON, never rewritten.
+  const stored = { ...streetSub("Дигоми"), ...fromStoredKeys('["digom"]') };
+  assert.deepEqual([...matchOutage(digomi, [sub(1, 10, stored)], ALL).keys()], [10]);
+  assert.match(renderOutage(digomi, [sub(1, 10, stored)]), /<b>დიღმის<\/b>/);
+
+  // SOCAR in Kaspi, 20 October: "წერეთლის ქ".
+  const kaspi = parseSocar(fixture("socar-2026-10-20.json")).find((o) => o.key === "socar:ac94afbe-046d-4601-a1cd-11dfe8967061");
+  const tsereteli = sub(2, 20, streetSub("Церетели", "კასპი"));
+  assert.deepEqual([...matchOutage(kaspi, [tsereteli], ALL).keys()], [20]);
+  assert.equal(renderOutage(kaspi, [tsereteli]).split("\n")[3], "📍 <b>ул. Церетели</b>");
 });
