@@ -10,8 +10,8 @@
 // update looks up first: a new chat takes its first user's Telegram language.
 import { hub } from "./hub-do.ts";
 import type { ChatInfo, AddResult, ReportResult, PlaceOutcome } from "./hub-do.ts";
-import { reverseGeocode, placeOfAddress, findMapLink, pointOfLink } from "./geo.ts";
-import type { Point } from "./geo.ts";
+import { reverseGeocode, placeOfAddress, findMapLink, readLink } from "./geo.ts";
+import type { Point, LinkRead } from "./geo.ts";
 import { isWholeCity } from "./candidates.ts";
 import type { Candidate } from "./candidates.ts";
 import { tg, describe, escapeHtml } from "./telegram.ts";
@@ -213,13 +213,17 @@ async function addStreet(env: Env, m: TgMessage, text: string, lang: Lang): Prom
   // A link from a maps app: its point, not its words.
   const link = findMapLink(text);
   if (link) {
-    let p: Point | undefined;
+    let read: LinkRead = {};
     try {
-      p = await pointOfLink(link);
+      read = await readLink(link);
     } catch (e) {
       console.warn(`maps link not followed: ${describe(e)}`);
     }
-    return p ? await followPoint(env, m, p, lang) : await send(env, m.chat.id, t(lang).linkUnreadable);
+    if (read.point) return await followPoint(env, m, read.point, lang);
+    // A link to an address that carries no point: its words.
+    if (read.address) return await replyOutcome(env, m.chat.id, read.address, await hub(env).addPlace(chatOf(m.chat), read.address), lang);
+    if (read.stoppedAt) console.warn(`maps link unreadable, stopped at ${read.stoppedAt}`);
+    return await send(env, m.chat.id, t(lang).linkUnreadable);
   }
   // The Hub reads the place — city, village, street, district — and either
   // subscribes or, when the notices read it several ways, asks which.

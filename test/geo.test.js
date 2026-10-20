@@ -2,7 +2,7 @@
 // The Nominatim addresses are real answers of 20 October 2026.
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { pointOfUrl, pointOfLink, findMapLink, placeOfAddress } from "../src/geo.ts";
+import { pointOfUrl, readLink, pointOfHtml, addressOfUrl, fromPhoton, findMapLink, placeOfAddress, reverseGeocode } from "../src/geo.ts";
 import { fromFullAddress } from "../src/places.ts";
 
 test("every maps app's link gives its point", () => {
@@ -33,7 +33,7 @@ test("a short link is followed through its redirects", async (t) => {
   ]);
   mock.method(globalThis, "fetch", async (url) => new Response(null, { status: 302, headers: { location: hops.get(String(url)) ?? "" } }));
   t.after(() => mock.restoreAll());
-  assert.deepEqual(await pointOfLink("https://maps.app.goo.gl/AbCdEf"), { lat: 41.7272, lon: 44.7487 });
+  assert.deepEqual(await readLink("https://maps.app.goo.gl/AbCdEf"), { point: { lat: 41.7272, lon: 44.7487 } });
 });
 
 test("Nominatim's address becomes municipality, settlement, street and district", () => {
@@ -78,4 +78,47 @@ test("an address pasted from a map reads like a typed one", () => {
   // Not a pasted address: left to the usual reading.
   assert.equal(read("Политковская, Мтацминда"), undefined);
   assert.equal(read("Батуми, Руставели"), undefined);
+});
+
+test("when Nominatim turns the Worker away, Photon answers in the same shape", async (t) => {
+  const asked = [];
+  mock.method(globalThis, "fetch", async (url) => {
+    asked.push(new URL(String(url)).host);
+    if (String(url).includes("nominatim")) return new Response("busy", { status: 503 });
+    // Photon's real answer for Bakuriani, 2026-10-21.
+    return Response.json({ features: [{ properties: {
+      housenumber: "15/1", street: "მერაბ კოსტავას ქუჩა", city: "ბაკურიანი",
+      county: "ბორჯომის მუნიციპალიტეტი", state: "სამცხე-ჯავახეთი", countrycode: "GE",
+    } }] });
+  });
+  t.after(() => mock.restoreAll());
+  const a = await reverseGeocode({ lat: 41.7508, lon: 43.5306 });
+  assert.deepEqual(asked, ["nominatim.openstreetmap.org", "photon.komoot.io"]);
+  // Photon calls Bakuriani a city; the bot knows it as a settlement of Borjomi.
+  assert.deepEqual(placeOfAddress(a), { city: "ბორჯომი", place: "ბაკურიანი", street: "მერაბ კოსტავას ქუჩა" });
+  assert.deepEqual(
+    placeOfAddress(fromPhoton({ street: "ილია ჭავჭავაძის გამზირი", district: "ვაკის რაიონი", city: "თბილისი", countrycode: "GE" })),
+    { city: "თბილისი", street: "ილია ჭავჭავაძის გამზირი", district: "ვაკე" },
+  );
+});
+
+test("Google's other shapes: a consent page, a search, a page, an address without a point", async (t) => {
+  const vake = { lat: 41.7099, lon: 44.7653 };
+  assert.deepEqual(pointOfUrl("https://consent.google.com/m?continue=https://www.google.com/maps/place/x/%4041.7099%2C44.7653%2C17z&gl=DE"), vake);
+  assert.deepEqual(pointOfUrl("https://www.google.com/maps/search/41.7099,+44.7653?entry=tts"), vake);
+  assert.deepEqual(pointOfHtml('<meta content="https://maps.google.com/maps/api/staticmap?center=41.7099%2C44.7653&zoom=17">'), vake);
+  assert.deepEqual(pointOfHtml("window.APP_INITIALIZATION_STATE=[[[1234.5,44.7653,41.7099],[0,0,0],[1024,768],13.1],[null,null,41.7099,44.7653]]"), vake);
+  assert.equal(addressOfUrl("https://www.google.com/maps/place/Ilia+Chavchavadze+Ave+37,+Tbilisi/data=!4m2!3m1!1s0x40440d:0x1"), "Ilia Chavchavadze Ave 37, Tbilisi");
+  assert.equal(addressOfUrl("https://www.google.com/maps/place/Stamba/data=!4m2"), undefined); // a name, not an address
+
+  // A short link answering with a page instead of a redirect.
+  mock.method(globalThis, "fetch", async () => new Response('<html><meta content="https://maps.google.com/maps/api/staticmap?center=41.7099%2C44.7653"></html>'));
+  t.after(() => mock.restoreAll());
+  assert.deepEqual(await readLink("https://maps.app.goo.gl/Page"), { point: vake });
+});
+
+test("a link that leads nowhere says where it stopped, for the log", async (t) => {
+  mock.method(globalThis, "fetch", async () => new Response("<html>nothing</html>", { status: 200 }));
+  t.after(() => mock.restoreAll());
+  assert.deepEqual(await readLink("https://maps.app.goo.gl/Nothing"), { stoppedAt: "maps.app.goo.gl 200" });
 });
